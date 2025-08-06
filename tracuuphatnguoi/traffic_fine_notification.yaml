@@ -25,12 +25,6 @@ blueprint:
 
     ```
 
-    #File secrets.yaml
-
-    gemini_api_key: XXXXXX      # Retrieve the key from the Google Cloud Console.
-
-    ```
-
     ## Hướng dẫn cài đặt
 
     ### Thêm Template Sensor cho từng xe theo mẫu bên dưới vào trong configuration.yaml của HA
