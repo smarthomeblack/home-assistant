@@ -124,25 +124,29 @@ mode: queued
 max_exceeded: silent
 
 triggers:
-  - trigger: state
+  - platform: state
     entity_id: !input vehicles
+    id: vehicle_trigger
 
-conditions:
-  - condition: template
-    value_template: "{{ trigger.from_state.state not in ['unavailable', 'unknown'] }}"
-  - condition: template
-    value_template: "{{ trigger.to_state.state not in ['unavailable', 'unknown'] }}"
-  - condition: template
-    value_template: "{{ not trigger.to_state.attributes.data.get('error') }}"
+variables:
+  entity_id: "{{ trigger.entity_id }}"
+  current_state: "{{ states[trigger.entity_id].state }}"
+  friendly_name: "{{ states[trigger.entity_id].attributes.friendly_name }}"
+  has_error: "{{ states[trigger.entity_id].attributes.data.error is defined }}"
+  is_violation: "{{ 'vi phạm giao thông' in states[trigger.entity_id].state }}"
 
-actions:
+condition:
+  - condition: template
+    value_template: "{{ is_violation and not has_error }}"
+
+action:
   - alias: Send a notification to each device
     repeat:
       for_each: !input notify_device
       sequence:
-        - action: "notify.mobile_app_{{ device_attr(repeat.item, 'name') | slugify }}"
+        - service: notify.mobile_app_{{ device_attr(repeat.item, 'name') | slugify }}
           data:
-            title: Xe {{ trigger.to_state.attributes.friendly_name }}
-            message: "{{ trigger.to_state.state }}"
+            title: "Xe {{ friendly_name }}"
+            message: "{{ current_state }}"
             data:
-              tag: "{{ 'tag_' ~ this.attributes.id }}"
+              tag: "{{ 'tag_violation_' ~ entity_id }}"
