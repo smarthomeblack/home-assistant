@@ -116,3 +116,20 @@ sequence:
       ttl: !input ttl
       image_path: "{{ image_path }}"
       message: "{{ message }}"
+    response_variable: zalo_result
+  - choose:
+      - conditions:
+          - condition: template
+            value_template: "{{ zalo_result.success == true }}"
+        sequence:
+          - variables:
+              response:
+                data:
+                  status: "success"
+                  message: "Gửi ảnh thành công"
+    default:
+      - variables:
+          response:
+            error: "{{ zalo_result.error | default('Gửi ảnh thất bại') }}"
+  - stop: ""
+    response_variable: response
