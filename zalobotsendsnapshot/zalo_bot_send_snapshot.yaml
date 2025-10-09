@@ -1,20 +1,41 @@
 blueprint:
   name: Zalo Bot - Send Image by Camera Name
   author: your_name
-  description: Gửi ảnh từ camera theo tên yêu cầu qua Zalo Bot.
+  description: >-
+    # Script to send camera snapshot via Zalo Bot
+
+    ## Blueprint Setup
+
+    ### Required
+
+    * Cấu hình danh sách camera (mapping tên và URL) trong trường Camera List.
+    * Khi chat với bot, nhập đúng tên camera để nhận ảnh tương ứng.
+    * Cần cấu hình đúng thread_id và account_selection của Zalo Bot.
+
+    ### Optional
+
+    * Có thể thêm nội dung message kèm theo ảnh.
+    * Có thể cấu hình TTL để tự thu hồi tin nhắn.
+
+    ### Note
+
+    * Nếu nhập tên camera không đúng, bot sẽ báo lỗi.
+    * Script này không tự động gửi ảnh, chỉ gửi khi có yêu cầu đúng tên camera.
   domain: script
   homeassistant:
     min_version: 2025.8.0
   input:
     cameras:
       name: Camera List
-      description: Danh sách camera (dạng mapping tên và URL).
+      description: |
+        Danh sách camera (dạng mapping tên và URL).
       selector:
         text:
           multiline: true
     camera_name:
       name: Camera Name
-      description: Tên camera cần gửi (ví dụ: san, cong, kho...)
+      description: |
+        Tên camera cần gửi (ví dụ: san, cong, kho...)
       selector:
         text:
     thread_id:
