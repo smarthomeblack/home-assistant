@@ -1,25 +1,20 @@
 blueprint:
   name: Zalo Bot - Send Image by Camera Name
   author: your_name
-  description: |
-    Gửi ảnh từ nhiều camera qua Zalo Bot bằng service zalo_bot.send_image. Chỉ cần nhập tên camera, bot sẽ gửi đúng ảnh.
-    # Ví dụ cấu hình cameras:
-    # '{"san": "http://...", "cong": "http://..."}'
+  description: Gửi ảnh từ camera theo tên yêu cầu qua Zalo Bot.
   domain: script
   homeassistant:
     min_version: 2025.8.0
   input:
     cameras:
       name: Camera List
-      description: |
-        Danh sách camera (dạng JSON, ví dụ: '{"san": "http://...", "cong": "http://..."}')
+      description: Danh sách camera (dạng mapping tên và URL).
       selector:
         text:
           multiline: true
     camera_name:
       name: Camera Name
-      description: |
-        Tên camera cần gửi (ví dụ: san, cong, kho...)
+      description: Tên camera cần gửi (ví dụ: san, cong, kho...)
       selector:
         text:
     thread_id:
