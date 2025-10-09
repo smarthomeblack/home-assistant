@@ -3,19 +3,22 @@ blueprint:
   author: your_name
   description: >
     Gửi ảnh từ nhiều camera qua Zalo Bot bằng service zalo_bot.send_image. Chỉ cần nhập tên camera, bot sẽ gửi đúng ảnh.
+    # Ví dụ cấu hình cameras:
+    # '{"san": "http://...", "cong": "http://..."}'
   domain: script
   homeassistant:
     min_version: 2025.8.0
   input:
     cameras:
       name: Camera List
-      description: Danh sách camera (dạng JSON: {"san": "http://...", "cong": "http://..."}).
+      description: |
+        Danh sách camera (dạng JSON, ví dụ: '{"san": "http://...", "cong": "http://..."}')
       selector:
         text:
           multiline: true
     camera_name:
       name: Camera Name
-      description: Tên camera cần gửi (ví dụ: san, cong, kho...).
+      description: Tên camera cần gửi (ví dụ: san, cong, kho...)
       selector:
         text:
     thread_id:
@@ -44,13 +47,13 @@ blueprint:
       default: 20000
 sequence:
   - variables:
-      cameras: "{{ namespace('json').loads(!input.cameras) }}"
-      camera_name: !input.camera_name
+      cameras: "{{ namespace('json').loads(cameras) }}"
+      camera_name: "{{ camera_name }}"
       image_url: "{{ cameras.get(camera_name) }}"
-      thread_id: !input.thread_id
-      account_selection: !input.account_selection
-      message: !input.message
-      ttl: !input.ttl
+      thread_id: "{{ thread_id }}"
+      account_selection: "{{ account_selection }}"
+      message: "{{ message }}"
+      ttl: "{{ ttl }}"
   - choose:
       - conditions:
           - condition: template
