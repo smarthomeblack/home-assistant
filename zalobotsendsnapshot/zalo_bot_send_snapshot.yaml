@@ -1,7 +1,7 @@
 blueprint:
   name: Zalo Bot - Send Image by Camera Name
   author: your_name
-  description: >
+  description: |
     Gửi ảnh từ nhiều camera qua Zalo Bot bằng service zalo_bot.send_image. Chỉ cần nhập tên camera, bot sẽ gửi đúng ảnh.
     # Ví dụ cấu hình cameras:
     # '{"san": "http://...", "cong": "http://..."}'
@@ -18,7 +18,8 @@ blueprint:
           multiline: true
     camera_name:
       name: Camera Name
-      description: Tên camera cần gửi (ví dụ: san, cong, kho...)
+      description: |
+        Tên camera cần gửi (ví dụ: san, cong, kho...)
       selector:
         text:
     thread_id:
