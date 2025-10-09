@@ -1,0 +1,159 @@
+blueprint:
+  name: Voice - Send Image to Zalo
+  author: github_copilot
+  description: >-
+    # Tool for sending images to Zalo used for Voice Assistant
+
+    ## Blueprint Setup
+
+    ### Required
+    * The Zalo Bot integration must be installed through HACS and properly configured.
+
+    ### Optional
+    * Adjust the prompts for each field used in the script. The descriptions guide the LLM to provide the correct input.
+
+    ### Note
+    * Provide a concise and precise description for the script. This will be utilized by the LLM to understand it should use this script for sending images to Zalo.
+    * Make sure to expose the script to Assist after the script has been saved.
+    * Do not alter the default script name.
+  domain: script
+  homeassistant:
+    min_version: 2024.10.0
+  input:
+    zalo_settings:
+      name: Settings for Zalo
+      icon: mdi:alpha-z-circle-outline
+      description: You can use these settings to configure Zalo for sending the image.
+      input:
+        account_selection:
+          name: Account
+          description: The account (phone number) to send the image.
+          selector:
+            text:
+        thread_id:
+          name: Thread ID
+          description: The thread to send the image to.
+          selector:
+            text:
+        receiver:
+          name: Type of Receiver
+          description: The type of receiver to send the image to.
+          selector:
+            select:
+              options:
+                - label: User
+                  value: "0"
+                - label: Group
+                  value: "1"
+          default: "0"
+        ttl:
+          name: TTL
+          description: Message auto-recall time in milliseconds. Default is 0.
+          selector:
+            number:
+              min: 0
+              step: 1
+          default: 0
+        snapshot_delay:
+          name: Thời gian chờ sau khi chụp ảnh (giây)
+          description: Nhập số giây chờ sau khi chụp ảnh trước khi kiểm tra file (mặc định 3 giây).
+          selector:
+            number:
+              min: 1
+              max: 10
+              step: 1
+          default: 3
+    prompt_settings:
+      name: Prompt settings for the LLM
+      icon: mdi:robot
+      description: You can use these settings to finetune the prompts for your specific LLM (model).
+      collapsed: true
+      input:
+        entity_prompt:
+          name: Camera Entity Prompt
+          description: The prompt which will be used for the LLM to provide the exact camera entity_id (e.g. camera.ezvizsan).
+          selector:
+            text:
+              multiline: true
+          default: >-
+            This argument is mandatory and must always be provided.
+            Enter the exact entity_id of the camera you want to snapshot (e.g. camera.ezvizsan).
+            Example: camera.ezvizsan
+        message_prompt:
+          name: Message Prompt
+          description: The prompt which will be used for the LLM to provide the message content.
+          selector:
+            text:
+              multiline: true
+          default: >-
+            This argument is optional.
+            Enter the camera name (kho, cong, san, phong khach) to indicate which camera the image is from.
+            You may also provide a short message to send along with the image.
+            Example: "Image from Camera Sân" or "Camera Sân snapshot".
+mode: queued
+max: 30
+max_exceeded: silent
+variables:
+  version: 20251009
+fields:
+  camera_entity:
+    name: Camera Entity
+    description: !input entity_prompt
+    selector:
+      text:
+    required: true
+  message:
+    name: Message
+    description: !input message_prompt
+    selector:
+      text:
+sequence:
+  - variables:
+      camera_entity: "{{ camera_entity | default('') | trim }}"
+      message: "{{ message | default('') | trim }}"
+  - service: camera.snapshot
+    data:
+      entity_id: "{{ camera_entity }}"
+      filename: "/media/zalo_snapshot.jpg"
+  - delay:
+      seconds: !input snapshot_delay
+  - service: shell_command.check_zalo_snapshot
+    response_variable: snapshot_status
+  - choose:
+      - conditions:
+          - condition: template
+            value_template: "{{ snapshot_status.stdout == 'exists' }}"
+        sequence:
+          - action: zalo_bot.send_image
+            data:
+              account_selection: !input account_selection
+              thread_id: !input thread_id
+              type: !input receiver
+              ttl: !input ttl
+              image_path: "/media/zalo_snapshot.jpg"
+              message: "{{ message }}"
+            response_variable: zalo_result
+          - service: shell_command.delete_zalo_snapshot
+          - choose:
+              - conditions:
+                  - condition: template
+                    value_template: "{{ zalo_result.success == true }}"
+                sequence:
+                  - variables:
+                      response:
+                        data:
+                          status: "success"
+                          message: "Gửi ảnh thành công"
+                          image_path: "/media/zalo_snapshot.jpg"
+                          camera_entity: "{{ camera_entity }}"
+                          zalo_message: "{{ message }}"
+            default:
+              - variables:
+                  response:
+                    error: "{{ zalo_result.error | default('Không thể lưu hình ảnh') }}"
+    default:
+      - variables:
+          response:
+            error: "Chụp ảnh thất bại, file không tồn tại."
+  - stop: ""
+    response_variable: response
