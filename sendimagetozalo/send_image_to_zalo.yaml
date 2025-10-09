@@ -48,12 +48,12 @@ blueprint:
           default: "0"
         ttl:
           name: TTL
-          description: Message auto-recall time in milliseconds. Default is 20000.
+          description: Message auto-recall time in milliseconds. Default is 0.
           selector:
             number:
               min: 0
               step: 1
-          default: 20000
+          default: 0
     prompt_settings:
       name: Prompt settings for the LLM
       icon: mdi:robot
