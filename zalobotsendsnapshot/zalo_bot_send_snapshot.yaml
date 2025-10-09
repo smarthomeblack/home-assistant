@@ -1,0 +1,65 @@
+blueprint:
+  name: Zalo Bot - Send Image by URL
+  author: your_name
+  description: >
+    Gửi ảnh từ URL bất kỳ qua Zalo Bot bằng service zalo_bot.send_image.
+  domain: script
+  homeassistant:
+    min_version: 2025.8.0
+  input:
+    camera_name:
+      name: Camera Name
+      description: Tên camera (hiển thị trong message).
+      selector:
+        text:
+    image_url:
+      name: Image URL
+      description: Link URL ảnh (có thể là link nội bộ hoặc public).
+      selector:
+        text:
+    thread_id:
+      name: Zalo Thread ID
+      description: Thread ID để gửi tin nhắn.
+      selector:
+        text:
+    account_selection:
+      name: Zalo Bot Account
+      description: Số điện thoại hoặc định danh tài khoản Zalo Bot.
+      selector:
+        text:
+    message:
+      name: Message (Optional)
+      description: Nội dung kèm theo ảnh (tùy chọn).
+      selector:
+        text:
+      default: ""
+    ttl:
+      name: TTL (Optional)
+      description: Thời gian tự thu hồi tin nhắn (ms), mặc định 20000.
+      selector:
+        number:
+          min: 0
+          step: 1
+      default: 20000
+sequence:
+  - variables:
+      camera_name: !input camera_name
+      image_url: !input image_url
+      thread_id: !input thread_id
+      account_selection: !input account_selection
+      message: !input message
+      ttl: !input ttl
+  - service: zalo_bot.send_image
+    data:
+      type: "1"
+      ttl: "{{ ttl }}"
+      image_path: "{{ image_url }}"
+      thread_id: "{{ thread_id }}"
+      account_selection: "{{ account_selection }}"
+      message: >
+        {% if message %}
+          {{ message }} (Camera: {{ camera_name }})
+        {% else %}
+          Camera: {{ camera_name }}
+        {% endif %}
+mode: single
