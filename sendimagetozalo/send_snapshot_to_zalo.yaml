@@ -1,6 +1,6 @@
 blueprint:
   name: Voice - Send Image to Zalo
-  author: github_copilot
+  author: smarthomeblack
   description: >-
     # Tool for sending images to Zalo used for Voice Assistant
 
