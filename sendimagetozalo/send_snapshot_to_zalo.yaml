@@ -77,8 +77,12 @@ blueprint:
               multiline: true
           default: >-
             This argument is mandatory and must always be provided.
-            Enter the exact entity_id of the camera you want to snapshot (e.g. camera.ezvizsan).
-            Example: camera.ezvizsan
+            Enter the exact entity_id of the camera you want to snapshot.
+            Available camera list:
+            - Cổng: camera.localhost_2
+            - Sân: camera.192_168_1_22
+            - Kho: camera.localhost
+            Example: If you want to send an image from the Yard camera, enter: camera.192_168_1_22
         message_prompt:
           name: Message Prompt
           description: The prompt which will be used for the LLM to provide the message content.
@@ -114,7 +118,7 @@ sequence:
   - service: camera.snapshot
     data:
       entity_id: "{{ camera_entity }}"
-      filename: "/media/zalo_snapshot.jpg"
+      filename: "/config/www/zalo_snapshot.jpg"
   - delay:
       seconds: !input snapshot_delay
   - service: shell_command.check_zalo_snapshot
@@ -130,7 +134,7 @@ sequence:
               thread_id: !input thread_id
               type: !input receiver
               ttl: !input ttl
-              image_path: "/media/zalo_snapshot.jpg"
+              image_path: "/config/www/zalo_snapshot.jpg"
               message: "{{ message }}"
             response_variable: zalo_result
           - service: shell_command.delete_zalo_snapshot
@@ -144,9 +148,6 @@ sequence:
                         data:
                           status: "success"
                           message: "Gửi ảnh thành công"
-                          image_path: "/media/zalo_snapshot.jpg"
-                          camera_entity: "{{ camera_entity }}"
-                          zalo_message: "{{ message }}"
             default:
               - variables:
                   response:
