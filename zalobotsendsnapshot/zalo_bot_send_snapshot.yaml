@@ -1,114 +1,115 @@
 blueprint:
-  name: Zalo Bot - Send Image by Camera Name
-  author: your_name
+  name: Voice - Send Image to Zalo
+  author: github_copilot
   description: >-
-    # Script to send camera snapshot via Zalo Bot
+    # Tool for sending images to Zalo used for Voice Assistant
 
     ## Blueprint Setup
 
     ### Required
-
-    * Thêm từng camera một với tên và URL, có thể thêm nhiều camera bằng nút '+' trong giao diện.
-    * Khi chat với bot, nhập đúng tên camera để nhận ảnh tương ứng.
-    * Cần cấu hình đúng thread_id và account_selection của Zalo Bot.
+    * The Zalo Bot integration must be installed through HACS and properly configured.
 
     ### Optional
-
-    * Có thể thêm nội dung message kèm theo ảnh.
-    * Có thể cấu hình TTL để tự thu hồi tin nhắn.
+    * Adjust the prompts for each field used in the script. The descriptions guide the LLM to provide the correct input.
 
     ### Note
-
-    * Nếu nhập tên camera không đúng, bot sẽ báo lỗi.
-    * Script này không tự động gửi ảnh, chỉ gửi khi có yêu cầu đúng tên camera.
+    * Provide a concise and precise description for the script. This will be utilized by the LLM to understand it should use this script for sending images to Zalo.
+    * Make sure to expose the script to Assist after the script has been saved.
+    * Do not alter the default script name.
   domain: script
   homeassistant:
-    min_version: 2025.8.0
+    min_version: 2024.10.0
   input:
-    cameras:
-      name: Camera List
-      description: Danh sách các camera (thêm từng camera một).
-      selector:
-        list:
-          item:
-            type: object
-            properties:
-              name:
-                name: Tên camera
-                selector:
-                  text:
-              url:
-                name: URL ảnh
-                selector:
-                  text:
-    camera_name:
-      name: Camera Name
-      description: |
-        Tên camera cần gửi (ví dụ: san, cong, kho...)
-      selector:
-        text:
-    thread_id:
-      name: Zalo Thread ID
-      description: Thread ID để gửi tin nhắn.
-      selector:
-        text:
-    account_selection:
-      name: Zalo Bot Account
-      description: Số điện thoại hoặc định danh tài khoản Zalo Bot.
-      selector:
-        text:
-    message:
-      name: Message (Optional)
-      description: Nội dung kèm theo ảnh (tùy chọn).
-      selector:
-        text:
-      default: ""
-    ttl:
-      name: TTL (Optional)
-      description: Thời gian tự thu hồi tin nhắn (ms), mặc định 20000.
-      selector:
-        number:
-          min: 0
-          step: 1
-      default: 20000
+    zalo_settings:
+      name: Settings for Zalo
+      icon: mdi:alpha-z-circle-outline
+      description: You can use these settings to configure Zalo for sending the image.
+      input:
+        account_selection:
+          name: Account
+          description: The account (phone number) to send the image.
+          selector:
+            text:
+        thread_id:
+          name: Thread ID
+          description: The thread to send the image to.
+          selector:
+            text:
+        receiver:
+          name: Type of Receiver
+          description: The type of receiver to send the image to.
+          selector:
+            select:
+              options:
+                - label: User
+                  value: "0"
+                - label: Group
+                  value: "1"
+          default: "0"
+        ttl:
+          name: TTL
+          description: Message auto-recall time in milliseconds. Default is 20000.
+          selector:
+            number:
+              min: 0
+              step: 1
+          default: 20000
+    prompt_settings:
+      name: Prompt settings for the LLM
+      icon: mdi:robot
+      description: You can use these settings to finetune the prompts for your specific LLM (model).
+      collapsed: true
+      input:
+        image_path_prompt:
+          name: Image Path Prompt
+          description: The prompt which will be used for the LLM to provide the image URL/path.
+          selector:
+            text:
+              multiline: true
+          default: >-
+            This argument is mandatory and must always be provided.
+            Select the correct camera and provide the full URL for the image you want to send.
+            Available cameras and their URLs:
+            - Kho: http://localhost:1984/api/frame.jpeg?src=camera.ezvizkho
+            - Cổng: http://localhost:1984/api/frame.jpeg?src=camera.ezvizcong
+            - Sân: http://localhost:1984/api/frame.jpeg?src=camera.ezvizsan
+            - Phòng Khách: http://localhost:1984/api/frame.jpeg?src=camera.pkhach
+            Only enter the URL that matches the camera you want to send.
+            Example: If you want to send an image from 'san', enter http://localhost:1984/api/frame.jpeg?src=camera.ezvizsan
+        message_prompt:
+          name: Message Prompt
+          description: The prompt which will be used for the LLM to provide the message content.
+          selector:
+            text:
+              multiline: true
+          default: >-
+            This argument is optional.
+            Enter the camera name (kho, cong, san, phong khach) to indicate which camera the image is from.
+            You may also provide a short message to send along with the image.
+            Example: "Image from Camera Sân" or "Camera Sân snapshot".
+mode: queued
+max: 30
+max_exceeded: silent
+variables:
+  version: 20251009
+fields:
+  image_path:
+    name: Image Path
+    description: !input image_path_prompt
+    selector:
+      text:
+    required: true
+  message:
+    name: Message
+    description: !input message_prompt
+    selector:
+      text:
 sequence:
-  - variables:
-      cameras: "{{ cameras }}"
-      camera_name: "{{ camera_name }}"
-      image_url: >
-        {% set url = None %}
-        {% for cam in cameras %}
-          {% if cam.name == camera_name %}
-            {% set url = cam.url %}
-          {% endif %}
-        {% endfor %}
-        {{ url }}
-      thread_id: "{{ thread_id }}"
-      account_selection: "{{ account_selection }}"
-      message: "{{ message }}"
-      ttl: "{{ ttl }}"
-  - choose:
-      - conditions:
-          - condition: template
-            value_template: "{{ image_url is not none and image_url != '' }}"
-        sequence:
-          - service: zalo_bot.send_image
-            data:
-              type: "1"
-              ttl: "{{ ttl }}"
-              image_path: "{{ image_url }}"
-              thread_id: "{{ thread_id }}"
-              account_selection: "{{ account_selection }}"
-              message: >
-                {% if message %}
-                  {{ message }} (Camera: {{ camera_name }})
-                {% else %}
-                  Camera: {{ camera_name }}
-                {% endif %}
-      - default:
-          - service: zalo_bot.send_message
-            data:
-              thread_id: "{{ thread_id }}"
-              account_selection: "{{ account_selection }}"
-              message: "Không tìm thấy camera '{{ camera_name }}' trong danh sách."
-mode: single
+  - action: zalo_bot.send_image
+    data:
+      account_selection: !input account_selection
+      thread_id: !input thread_id
+      type: !input receiver
+      ttl: !input ttl
+      image_path: !input image_path
+      message: !input message
