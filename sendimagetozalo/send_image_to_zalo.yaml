@@ -1,0 +1,118 @@
+blueprint:
+  name: Voice - Send Image to Zalo
+  author: github_copilot
+  description: >-
+    # Tool for sending images to Zalo used for Voice Assistant
+
+    ## Blueprint Setup
+
+    ### Required
+    * The Zalo Bot integration must be installed through HACS and properly configured.
+
+    ### Optional
+    * Adjust the prompts for each field used in the script. The descriptions guide the LLM to provide the correct input.
+
+    ### Note
+    * Provide a concise and precise description for the script. This will be utilized by the LLM to understand it should use this script for sending images to Zalo.
+    * Make sure to expose the script to Assist after the script has been saved.
+    * Do not alter the default script name.
+  domain: script
+  homeassistant:
+    min_version: 2024.10.0
+  input:
+    zalo_settings:
+      name: Settings for Zalo
+      icon: mdi:alpha-z-circle-outline
+      description: You can use these settings to configure Zalo for sending the image.
+      input:
+        account_selection:
+          name: Account
+          description: The account (phone number) to send the image.
+          selector:
+            text:
+        thread_id:
+          name: Thread ID
+          description: The thread to send the image to.
+          selector:
+            text:
+        receiver:
+          name: Type of Receiver
+          description: The type of receiver to send the image to.
+          selector:
+            select:
+              options:
+                - label: User
+                  value: "0"
+                - label: Group
+                  value: "1"
+          default: "0"
+        ttl:
+          name: TTL
+          description: Message auto-recall time in milliseconds. Default is 20000.
+          selector:
+            number:
+              min: 0
+              step: 1
+          default: 20000
+    prompt_settings:
+      name: Prompt settings for the LLM
+      icon: mdi:robot
+      description: You can use these settings to finetune the prompts for your specific LLM (model).
+      collapsed: true
+      input:
+        image_path_prompt:
+          name: Image Path Prompt
+          description: The prompt which will be used for the LLM to provide the image URL/path.
+          selector:
+            text:
+              multiline: true
+          default: >-
+            This argument is mandatory and must always be provided.
+            Select the correct camera and provide the full URL for the image you want to send.
+            Available cameras and their URLs:
+            - Kho: http://localhost:1984/api/frame.jpeg?src=camera.ezvizkho
+            - Cổng: http://localhost:1984/api/frame.jpeg?src=camera.ezvizcong
+            - Sân: http://localhost:1984/api/frame.jpeg?src=camera.ezvizsan
+            - Phòng Khách: http://localhost:1984/api/frame.jpeg?src=camera.pkhach
+            Only enter the URL that matches the camera you want to send.
+            Example: If you want to send an image from 'san', enter http://localhost:1984/api/frame.jpeg?src=camera.ezvizsan
+        message_prompt:
+          name: Message Prompt
+          description: The prompt which will be used for the LLM to provide the message content.
+          selector:
+            text:
+              multiline: true
+          default: >-
+            This argument is optional.
+            Enter the camera name (kho, cong, san, phong khach) to indicate which camera the image is from.
+            You may also provide a short message to send along with the image.
+            Example: "Image from Camera Sân" or "Camera Sân snapshot".
+mode: queued
+max: 30
+max_exceeded: silent
+variables:
+  version: 20251009
+fields:
+  image_path:
+    name: Image Path
+    description: !input image_path_prompt
+    selector:
+      text:
+    required: true
+  message:
+    name: Message
+    description: !input message_prompt
+    selector:
+      text:
+sequence:
+  - variables:
+      image_path: "{{ image_path | default('') | trim }}"
+      message: "{{ message | default('') | trim }}"
+  - action: zalo_bot.send_image
+    data:
+      account_selection: !input account_selection
+      thread_id: !input thread_id
+      type: !input receiver
+      ttl: !input ttl
+      image_path: "{{ image_path }}"
+      message: "{{ message }}"
