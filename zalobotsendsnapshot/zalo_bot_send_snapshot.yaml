@@ -8,7 +8,7 @@ blueprint:
 
     ### Required
 
-    * Cấu hình danh sách camera (mapping tên và URL) trong trường Camera List.
+    * Thêm từng camera một với tên và URL, có thể thêm nhiều camera bằng nút '+' trong giao diện.
     * Khi chat với bot, nhập đúng tên camera để nhận ảnh tương ứng.
     * Cần cấu hình đúng thread_id và account_selection của Zalo Bot.
 
@@ -27,11 +27,20 @@ blueprint:
   input:
     cameras:
       name: Camera List
-      description: |
-        Danh sách camera (dạng mapping tên và URL).
+      description: Danh sách các camera (thêm từng camera một).
       selector:
-        text:
-          multiline: true
+        list:
+          item:
+            type: object
+            properties:
+              name:
+                name: Tên camera
+                selector:
+                  text:
+              url:
+                name: URL ảnh
+                selector:
+                  text:
     camera_name:
       name: Camera Name
       description: |
@@ -64,9 +73,16 @@ blueprint:
       default: 20000
 sequence:
   - variables:
-      cameras: "{{ namespace('json').loads(cameras) }}"
+      cameras: "{{ cameras }}"
       camera_name: "{{ camera_name }}"
-      image_url: "{{ cameras.get(camera_name) }}"
+      image_url: >
+        {% set url = None %}
+        {% for cam in cameras %}
+          {% if cam.name == camera_name %}
+            {% set url = cam.url %}
+          {% endif %}
+        {% endfor %}
+        {{ url }}
       thread_id: "{{ thread_id }}"
       account_selection: "{{ account_selection }}"
       message: "{{ message }}"
@@ -74,7 +90,7 @@ sequence:
   - choose:
       - conditions:
           - condition: template
-            value_template: "{{ image_url is not none }}"
+            value_template: "{{ image_url is not none and image_url != '' }}"
         sequence:
           - service: zalo_bot.send_image
             data:
