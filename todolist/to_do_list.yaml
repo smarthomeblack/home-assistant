@@ -60,9 +60,15 @@ blueprint:
               multiline: true
           default: >-
             Required for: add_item
-            Provide the name/summary of the new to-do item.
+            Extract ONLY the core task name from user's request.
+            IMPORTANT: Remove ALL time/date information from the task name.
+            Time/date info should go to due_date or due_datetime fields, NOT in task name.
+            Examples:
+            - User: "Thêm rửa bát cho vợ vào 14h ngày mai" → task_name: "Rửa bát cho vợ"
+            - User: "Nhắc tôi mua sữa lúc 8h sáng" → task_name: "Mua sữa"
+            - User: "Họp với sếp ngày 15/10" → task_name: "Họp với sếp"
             No extra commentary, no markdown or emojis.
-            Return only the task name.
+            Return only the clean task name without time/date.
         item_uid_prompt:
           name: Item UID Prompt
           description: The prompt for the LLM to provide the item UID for removal or update.
@@ -94,8 +100,22 @@ blueprint:
               multiline: true
           default: >-
             Optional for: add_item, update_item
-            If user provides only a date (no time), return in format: YYYY-MM-DD (e.g., 2025-10-11)
-            If user provides both date and time, use due_datetime field instead (leave this blank).
+            CRITICAL: Analyze user's request carefully to determine if they specify a TIME or just a DATE.
+            
+            USE THIS FIELD (due_date) ONLY IF:
+            - User mentions only a date WITHOUT specific time
+            - Examples: "ngày mai", "thứ 2 tuần sau", "15/10", "cuối tháng"
+            
+            DO NOT USE this field if user mentions TIME:
+            - "14h", "8 giờ sáng", "3h chiều", "lúc 10h" → Use due_datetime instead
+            
+            Format: YYYY-MM-DD (e.g., 2025-10-11)
+            Calculate dates from current date (today is Saturday, October 11, 2025):
+            - "ngày mai" = 2025-10-12
+            - "hôm nay" = 2025-10-11
+            - "thứ 2" = next Monday
+            
+            If user specifies time, leave this field BLANK and use due_datetime instead.
             Never provide both due_date and due_datetime at the same time.
         due_datetime_prompt:
           name: Due Datetime Prompt
@@ -105,8 +125,30 @@ blueprint:
               multiline: true
           default: >-
             Optional for: add_item, update_item
-            If user provides both date and time, return in format: YYYY-MM-DD HH:MM:SS (e.g., 2025-10-11 14:13:00)
-            If user provides only a date (no time), use due_date field instead (leave this blank).
+            CRITICAL: Use this field ONLY when user specifies BOTH date AND time.
+            
+            USE THIS FIELD (due_datetime) WHEN user mentions TIME:
+            - "14h ngày mai", "8 giờ sáng thứ 2", "3h chiều hôm nay", "lúc 10h"
+            - Parse the time and date, then combine them
+            
+            DO NOT USE this field if user only mentions date without time:
+            - "ngày mai", "thứ 2", "15/10" → Use due_date instead
+            
+            Format: YYYY-MM-DD HH:MM:SS (24-hour format)
+            Examples:
+            - "14h ngày mai" → "2025-10-12 14:00:00"
+            - "8 giờ sáng" → "2025-10-11 08:00:00" (assume today)
+            - "3h chiều thứ 2" → "2025-10-13 15:00:00"
+            - "10h tối" → "2025-10-11 22:00:00"
+            
+            Time conversion:
+            - Sáng (morning): 06:00-11:00
+            - Trưa (noon): 12:00
+            - Chiều (afternoon): 13:00-17:00
+            - Tối (evening): 18:00-22:00
+            - Đêm (night): 23:00-05:00
+            
+            If user provides only date (no time), leave this field BLANK and use due_date instead.
             Never provide both due_date and due_datetime at the same time.
         rename_prompt:
           name: Rename Prompt
