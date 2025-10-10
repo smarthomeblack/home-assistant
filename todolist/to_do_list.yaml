@@ -61,7 +61,6 @@ blueprint:
             Example: "Go to market at 6am", "Exercise at 6pm".
           selector:
             text:
-          required: false
         item_description:
           name: Item Description
           description: |
@@ -70,7 +69,6 @@ blueprint:
             Example: "Buy vegetables, meat, fish..."
           selector:
             text:
-          required: false
         due_date:
           name: Due Date
           description: |
