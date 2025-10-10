@@ -79,9 +79,9 @@ blueprint:
             text:
               multiline: true
           default: >-
-            Nếu chỉ có ngày, trả về ngày theo định dạng YYYY-MM-DD và chỉ truyền vào trường due_date.
-            Nếu có cả ngày và giờ, không trả về giá trị cho trường này, hãy dùng trường due_datetime.
-            Không được truyền cả hai trường cùng lúc.
+            If only a date is provided, return the date in YYYY-MM-DD format and use only the due_date field.
+            If both date and time are provided, do not return a value for this field; use the due_datetime field instead.
+            Never provide both fields at the same time.
         due_datetime_prompt:
           name: Due Datetime Prompt
           description: The prompt for the LLM to provide the due datetime.
@@ -89,9 +89,9 @@ blueprint:
             text:
               multiline: true
           default: >-
-            Nếu có cả ngày và giờ, trả về giá trị theo định dạng YYYY-MM-DDTHH:MM:SS và chỉ truyền vào trường due_datetime.
-            Nếu chỉ có ngày, không trả về giá trị cho trường này, hãy dùng trường due_date.
-            Không được truyền cả hai trường cùng lúc.
+            If both date and time are provided, return the value in YYYY-MM-DDTHH:MM:SS format and use only the due_datetime field.
+            If only a date is provided, do not return a value for this field; use the due_date field instead.
+            Never provide both fields at the same time.
         item_uid_prompt:
           name: Item UID Prompt
           description: The prompt for the LLM to provide the item UID (unique identifier).
