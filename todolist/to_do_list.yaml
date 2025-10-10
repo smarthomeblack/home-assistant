@@ -77,7 +77,6 @@ blueprint:
             Example: "2025-10-12"
           selector:
             text:
-          required: false
 mode: queued
 max: 30
 max_exceeded: silent
