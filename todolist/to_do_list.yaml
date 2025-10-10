@@ -26,7 +26,7 @@ blueprint:
       input:
         todo_entity:
           name: To-Do List Entity
-          description: The entity_id of the to-do list (e.g. todo.personal_tasks)
+          description: The entity_id of the to-do list (e.g. todo.viec_can_lam)
           selector:
             entity:
               domain: todo
@@ -44,32 +44,46 @@ blueprint:
               multiline: true
           default: >-
             This argument is mandatory and must always be provided.
-            Return exactly one of the following options: add, delete, get, remove_item, remove_completed_items, update_item.
+            Return exactly one of the following options: add_item, get_items, remove_item, remove_completed_items, update_item.
             Return only the word, without quotes or extra text.
-            For remove_item, remove_completed_items, update_item: Always call get_items first to retrieve the current list and item details before proceeding.
-            When submitting multiple items, make sure each one must be sent separately through a separate tool call.
-        item_summary_prompt:
-          name: Item Summary Prompt
-          description: The prompt for the LLM to provide the item summary.
+            - add_item: Add a new to-do item
+            - get_items: Get list of to-do items (all or filtered by status)
+            - remove_item: Permanently delete a specific item (requires item_uid)
+            - remove_completed_items: Remove all completed items
+            - update_item: Update an existing item (requires item_uid)
+            For remove_item and update_item: Always call get_items first to retrieve the UID of the target item.
+        task_name_prompt:
+          name: Task Name Prompt
+          description: The prompt for the LLM to provide the task name when adding new item.
           selector:
             text:
               multiline: true
           default: >-
-            This argument is required for add, delete, remove_item, update_item actions.
-            Provide a brief summary of the to-do item.
-            For remove_item and update_item: Always call get_items first to retrieve the summary and other details from the list.
+            Required for: add_item
+            Provide the name/summary of the new to-do item.
             No extra commentary, no markdown or emojis.
-            Return only the summary text.
-        item_description_prompt:
-          name: Item Description Prompt
-          description: The prompt for the LLM to provide the item description.
+            Return only the task name.
+        item_uid_prompt:
+          name: Item UID Prompt
+          description: The prompt for the LLM to provide the item UID for removal or update.
           selector:
             text:
               multiline: true
           default: >-
-            This argument is optional (used for add, update_item).
-            Provide detailed information about the to-do item.
-            For update_item: Always call get_items first to retrieve the description and other details from the list.
+            Required for: remove_item, update_item
+            Always call get_items first to retrieve the UID of the target item.
+            The UID is a long unique identifier (e.g., 6901dc38-a61a-11f0-ad85-bc24112f1158).
+            Return only the UID value, no extra text.
+        task_description_prompt:
+          name: Task Description Prompt
+          description: The prompt for the LLM to provide the task description.
+          selector:
+            text:
+              multiline: true
+          default: >-
+            Optional for: add_item, update_item
+            Provide detailed information about the to-do item if user requests it.
+            If user doesn't provide description, leave blank.
             No links, no markdown/emojis, no additional commentary.
             Return only the description text.
         due_date_prompt:
@@ -79,9 +93,10 @@ blueprint:
             text:
               multiline: true
           default: >-
-            If only a date is provided, return the date in YYYY-MM-DD format and use only the due_date field.
-            If both date and time are provided, do not return a value for this field; use the due_datetime field instead.
-            Never provide both fields at the same time.
+            Optional for: add_item, update_item
+            If user provides only a date (no time), return in format: YYYY-MM-DD (e.g., 2025-10-11)
+            If user provides both date and time, use due_datetime field instead (leave this blank).
+            Never provide both due_date and due_datetime at the same time.
         due_datetime_prompt:
           name: Due Datetime Prompt
           description: The prompt for the LLM to provide the due datetime.
@@ -89,81 +104,73 @@ blueprint:
             text:
               multiline: true
           default: >-
-            If both date and time are provided, return the value in YYYY-MM-DDTHH:MM:SS format and use only the due_datetime field.
-            If only a date is provided, do not return a value for this field; use the due_date field instead.
-            Never provide both fields at the same time.
-        item_uid_prompt:
-          name: Item UID Prompt
-          description: The prompt for the LLM to provide the item UID (unique identifier).
-          selector:
-            text:
-              multiline: true
-          default: >-
-            This argument is required for remove_item and update_item actions.
-            Always call get_items first to retrieve the UID of the to-do item to remove or update.
-            Provide the UID of the to-do item to remove or update.
-            Return only the UID value.
+            Optional for: add_item, update_item
+            If user provides both date and time, return in format: YYYY-MM-DD HH:MM:SS (e.g., 2025-10-11 14:13:00)
+            If user provides only a date (no time), use due_date field instead (leave this blank).
+            Never provide both due_date and due_datetime at the same time.
         rename_prompt:
           name: Rename Prompt
-          description: The prompt for the LLM to provide the new summary (rename) for the item when updating.
+          description: The prompt for the LLM to provide the new task name when updating.
           selector:
             text:
               multiline: true
           default: >-
-            This argument is optional (used for update_item).
-            Provide the new summary for the to-do item if you want to rename it.
-            If not renaming, leave blank.
-            Return only the new summary text.
+            Optional for: update_item only
+            If user wants to rename the task, provide the new name.
+            If user doesn't want to rename, leave blank.
+            Return only the new task name, no extra text.
         status_prompt:
           name: Status Prompt
-          description: The prompt for the LLM to provide the status for the item (needs_action, completed, etc.).
+          description: The prompt for the LLM to provide the task status.
           selector:
             text:
               multiline: true
           default: >-
-            This argument is optional (used for update_item).
-            Provide the status for the to-do item (needs_action, completed).
-            needs_action: Not completed.
-            completed: Completed.
-            If not changing status, leave blank.
-            Return only the status value.
+            Optional for: update_item, get_items
+            For update_item: Provide the status if user wants to change it.
+            - needs_action: Task not completed yet
+            - completed: Task is completed
+            For get_items: Filter items by status (can provide multiple values separated by comma).
+            - needs_action: Get only incomplete tasks
+            - completed: Get only completed tasks
+            - Leave blank: Get all tasks
+            If not changing status (for update_item) or not filtering (for get_items), leave blank.
 mode: queued
 max: 30
 max_exceeded: silent
 variables:
-  version: 20251011
+  version: 20251011_v2
 fields:
-  todo_entity:
-    name: To-Do List Entity
-    description: !input action_type_prompt
-    selector:
-      entity:
-        domain: todo
-    required: true
   action_type:
     name: Action Type
     description: !input action_type_prompt
     selector:
       select:
         options:
-          - add
-          - delete
-          - get
+          - add_item
+          - get_items
           - remove_item
           - remove_completed_items
           - update_item
     required: true
-  item_summary:
-    name: Item Summary
-    description: !input item_summary_prompt
+  task_name:
+    name: Task Name
+    description: !input task_name_prompt
     selector:
       text:
     required: false
-  item_description:
-    name: Item Description
-    description: !input item_description_prompt
+  item_uid:
+    name: Item UID
+    description: !input item_uid_prompt
     selector:
       text:
+    required: false
+  task_description:
+    name: Task Description
+    description: !input task_description_prompt
+    selector:
+      text:
+        multiline: true
     required: false
   due_date:
     name: Due Date
@@ -177,12 +184,6 @@ fields:
     selector:
       text:
     required: false
-  item_uid:
-    name: Item UID
-    description: !input item_uid_prompt
-    selector:
-      text:
-    required: false
   rename:
     name: Rename
     description: !input rename_prompt
@@ -193,44 +194,43 @@ fields:
     name: Status
     description: !input status_prompt
     selector:
-      select:
-        options:
-          - needs_action
-          - completed
+      text:
     required: false
 sequence:
   - variables:
       todo_entity: !input todo_entity
-      action_type: "{{ action_type | default('get') | trim }}"
-      item_summary: "{{ item_summary | default('') | trim }}"
-      item_description: "{{ item_description | default('') | trim }}"
+      action_type: "{{ action_type | default('get_items') | trim }}"
+      task_name: "{{ task_name | default('') | trim }}"
+      item_uid: "{{ item_uid | default('') | trim }}"
+      task_description: "{{ task_description | default('') | trim }}"
       due_date: "{{ due_date | default('') | trim }}"
       due_datetime: "{{ due_datetime | default('') | trim }}"
-      item_uid: "{{ item_uid | default('') | trim }}"
       rename: "{{ rename | default('') | trim }}"
-      status: "{{ status | default('') | trim }}"
-  - alias: Check if variables were set correctly
+      status_input: "{{ status | default('') | trim }}"
+  - alias: Validate inputs
     if:
       - condition: template
         value_template: >-
           {{
             (not todo_entity)
-            or (action_type not in ['add', 'delete', 'get', 'remove_item', 'remove_completed_items', 'update_item'])
-            or ((action_type in ['add', 'delete', 'remove_item', 'update_item']) and not item_summary and not item_uid)
+            or (action_type not in ['add_item', 'get_items', 'remove_item', 'remove_completed_items', 'update_item'])
+            or (action_type == 'add_item' and not task_name)
+            or (action_type in ['remove_item', 'update_item'] and not item_uid)
           }}
     then:
-      - alias: Set variable for error message
-        variables:
+      - variables:
           response:
             error: >-
-              Unable to process to-do list because one or more inputs are missing or invalid (todo_entity, action_type, item_summary/item_uid).
-      - alias: Stop the script
-        stop: Unable to process to-do list due to invalid inputs.
+              Invalid inputs. Required fields:
+              - add_item: task_name
+              - remove_item: item_uid
+              - update_item: item_uid
+      - stop: Invalid inputs
         response_variable: response
   - choose:
       - conditions:
           - condition: template
-            value_template: "{{ action_type == 'add' }}"
+            value_template: "{{ action_type == 'add_item' }}"
         sequence:
           - choose:
               - conditions:
@@ -241,15 +241,9 @@ sequence:
                     target:
                       entity_id: !input todo_entity
                     data:
-                      item: "{{ item_summary }}"
-                      description: "{{ item_description }}"
+                      item: "{{ task_name }}"
+                      description: "{{ task_description }}"
                       due_datetime: "{{ due_datetime }}"
-                  - variables:
-                      response:
-                        status: "success"
-                        message: "Item added successfully"
-                  - stop: ""
-                    response_variable: response
               - conditions:
                   - condition: template
                     value_template: "{{ due_date | length > 0 }}"
@@ -258,84 +252,67 @@ sequence:
                     target:
                       entity_id: !input todo_entity
                     data:
-                      item: "{{ item_summary }}"
-                      description: "{{ item_description }}"
+                      item: "{{ task_name }}"
+                      description: "{{ task_description }}"
                       due_date: "{{ due_date }}"
-                  - variables:
-                      response:
-                        status: "success"
-                        message: "Item added successfully"
-                  - stop: ""
-                    response_variable: response
+            default:
+              - service: todo.add_item
+                target:
+                  entity_id: !input todo_entity
+                data:
+                  item: "{{ task_name }}"
+                  description: "{{ task_description }}"
+          - variables:
+              response:
+                status: "success"
+                message: "Task added successfully"
+          - stop: ""
+            response_variable: response
       - conditions:
           - condition: template
-            value_template: "{{ action_type == 'delete' }}"
+            value_template: "{{ action_type == 'get_items' }}"
         sequence:
-          - service: todo.get_items
-            target:
-              entity_id: !input todo_entity
-            response_variable: todo_items
-          - variables:
-              item_uid: >-
-                {% set found = todo_items[todo_entity]['items'] | selectattr('summary', 'equalto', item_summary) | list %}
-                {% if found and found[0] %}{{ found[0]['uid'] }}{% else %}{{ '' }}{% endif %}
           - choose:
               - conditions:
                   - condition: template
-                    value_template: "{{ item_uid != '' }}"
+                    value_template: "{{ status_input | length > 0 }}"
                 sequence:
-                  - service: todo.update_item
+                  - variables:
+                      status_list: >-
+                        {{ status_input.split(',') | map('trim') | list }}
+                  - service: todo.get_items
                     target:
                       entity_id: !input todo_entity
                     data:
-                      item: "{{ item_uid }}"
-                      status: completed
-                  - variables:
-                      response:
-                        status: "success"
-                        message: "Item deleted successfully"
-                  - stop: ""
-                    response_variable: response
-              - conditions:
-                  - condition: template
-                    value_template: "{{ item_uid == '' }}"
-                sequence:
-                  - variables:
-                      response:
-                        status: "error"
-                        message: "Item not found for deletion."
-                  - stop: ""
-                    response_variable: response
+                      status: "{{ status_list }}"
+                    response_variable: todo_items
+            default:
+              - service: todo.get_items
+                target:
+                  entity_id: !input todo_entity
+                response_variable: todo_items
+          - variables:
+              response:
+                items: "{{ todo_items[todo_entity]['items'] }}"
+                status: "success"
+                message: "Items retrieved successfully"
+          - stop: ""
+            response_variable: response
       - conditions:
           - condition: template
             value_template: "{{ action_type == 'remove_item' }}"
         sequence:
-          - choose:
-              - conditions:
-                  - condition: template
-                    value_template: "{{ item_uid != '' }}"
-                sequence:
-                  - service: todo.remove_item
-                    target:
-                      entity_id: !input todo_entity
-                    data:
-                      item: "{{ item_uid }}"
-                  - variables:
-                      response:
-                        status: "success"
-                        message: "Item removed successfully"
-                  - stop: ""
-                    response_variable: response
-              - conditions:
-                  - condition: template
-                    value_template: "{{ item_uid == '' }}"
-                sequence:
-                  - variables:
-                      response:
-                        status: "error"
-                        message: "Item UID not provided for removal."
-                  - stop: ""
-                    response_variable: response
+          - service: todo.remove_item
+            target:
+              entity_id: !input todo_entity
+            data:
+              item: "{{ item_uid }}"
+          - variables:
+              response:
+                status: "success"
+                message: "Item removed successfully"
+          - stop: ""
+            response_variable: response
       - conditions:
           - condition: template
             value_template: "{{ action_type == 'remove_completed_items' }}"
@@ -346,81 +323,60 @@ sequence:
           - variables:
               response:
                 status: "success"
-                message: "Completed items removed successfully"
+                message: "All completed items removed successfully"
           - stop: ""
             response_variable: response
       - conditions:
           - condition: template
             value_template: "{{ action_type == 'update_item' }}"
         sequence:
-          - service: todo.get_items
-            target:
-              entity_id: !input todo_entity
           - variables:
-              item_uid: >-
-                {% set found = todo_items[todo_entity]['items'] | selectattr('summary', 'equalto', item_summary) | list %}
-                {% if found and found[0] %}{{ found[0]['uid'] }}{% else %}{{ '' }}{% endif %}
-          - choose:
-              - conditions:
+              update_data:
+                item: "{{ item_uid }}"
+          - if:
+              - condition: template
+                value_template: "{{ rename | length > 0 }}"
+            then:
+              - variables:
+                  update_data: "{{ dict(update_data, rename=rename) }}"
+          - if:
+              - condition: template
+                value_template: "{{ status_input | length > 0 }}"
+            then:
+              - variables:
+                  update_data: "{{ dict(update_data, status=status_input) }}"
+          - if:
+              - condition: template
+                value_template: "{{ task_description | length > 0 }}"
+            then:
+              - variables:
+                  update_data: "{{ dict(update_data, description=task_description) }}"
+          - if:
+              - condition: template
+                value_template: "{{ due_datetime | length > 0 }}"
+            then:
+              - variables:
+                  update_data: "{{ dict(update_data, due_datetime=due_datetime) }}"
+            else:
+              - if:
                   - condition: template
-                    value_template: "{{ item_uid != '' and due_datetime | length > 0 }}"
-                sequence:
-                  - service: todo.update_item
-                    target:
-                      entity_id: !input todo_entity
-                    data:
-                      item: "{{ item_uid }}"
-                      rename: "{{ item_summary }}"
-                      status: "{{ status | default('needs_action') }}"
-                      description: "{{ item_description }}"
-                      due_datetime: "{{ due_datetime }}"
+                    value_template: "{{ due_date | length > 0 }}"
+                then:
                   - variables:
-                      response:
-                        status: "success"
-                        message: "Item updated successfully"
-                  - stop: ""
-                    response_variable: response
-              - conditions:
-                  - condition: template
-                    value_template: "{{ item_uid != '' and due_date | length > 0 }}"
-                sequence:
-                  - service: todo.update_item
-                    target:
-                      entity_id: !input todo_entity
-                    data:
-                      item: "{{ item_uid }}"
-                      rename: "{{ item_summary }}"
-                      status: "{{ status | default('needs_action') }}"
-                      description: "{{ item_description }}"
-                      due_date: "{{ due_date }}"
-                  - variables:
-                      response:
-                        status: "success"
-                        message: "Item updated successfully"
-                  - stop: ""
-                    response_variable: response
-              - conditions:
-                  - condition: template
-                    value_template: "{{ item_uid == '' }}"
-                sequence:
-                  - variables:
-                      response:
-                        status: "error"
-                        message: "Item not found for update."
-                  - stop: ""
-                    response_variable: response
-      - conditions:
-          - condition: template
-            value_template: "{{ action_type == 'get' }}"
-        sequence:
-          - service: todo.get_items
+                      update_data: "{{ dict(update_data, due_date=due_date) }}"
+          - service: todo.update_item
             target:
               entity_id: !input todo_entity
-            response_variable: todo_items
+            data: "{{ update_data }}"
           - variables:
               response:
-                items: "{{ todo_items[todo_entity]['items'] }}"
                 status: "success"
-                message: "Items fetched successfully"
+                message: "Item updated successfully"
           - stop: ""
             response_variable: response
+    default:
+      - variables:
+          response:
+            error: "Unknown action type"
+      - stop: "Unknown action"
+        response_variable: response
