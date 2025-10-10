@@ -198,7 +198,7 @@ sequence:
             response_variable: todo_items
           - variables:
               item_uid: >-
-                {% set found = todo_items[!input todo_entity]['items'] | selectattr('summary', 'equalto', item_summary) | list %}
+                {% set found = todo_items[todo_entity]['items'] | selectattr('summary', 'equalto', item_summary) | list %}
                 {% if found and found[0] %}{{ found[0]['uid'] }}{% else %}{{ '' }}{% endif %}
           - choose:
               - conditions:
@@ -298,7 +298,7 @@ sequence:
             response_variable: todo_items
           - variables:
               response:
-                items: "{{ todo_items[!input todo_entity]['items'] }}"
+                items: "{{ todo_items[todo_entity]['items'] }}"
                 status: "success"
                 message: "Items fetched successfully"
           - stop: ""
