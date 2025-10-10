@@ -44,8 +44,9 @@ blueprint:
               multiline: true
           default: >-
             This argument is mandatory and must always be provided.
-            Return exactly one of the following options: add, delete, get.
+            Return exactly one of the following options: add, delete, get, remove_item, remove_completed_items, update_item.
             Return only the word, without quotes or extra text.
+            For remove_item, remove_completed_items, update_item: Always call get_items first to retrieve the current list and item details before proceeding.
             When submitting multiple items, make sure each one must be sent separately through a separate tool call.
         item_summary_prompt:
           name: Item Summary Prompt
@@ -54,8 +55,9 @@ blueprint:
             text:
               multiline: true
           default: >-
-            This argument is required for add and delete actions.
+            This argument is required for add, delete, remove_item, update_item actions.
             Provide a brief summary of the to-do item.
+            For remove_item and update_item: Always call get_items first to retrieve the summary and other details from the list.
             No extra commentary, no markdown or emojis.
             Return only the summary text.
         item_description_prompt:
@@ -65,8 +67,9 @@ blueprint:
             text:
               multiline: true
           default: >-
-            This argument is optional (used only for add).
+            This argument is optional (used for add, update_item).
             Provide detailed information about the to-do item.
+            For update_item: Always call get_items first to retrieve the description and other details from the list.
             No links, no markdown/emojis, no additional commentary.
             Return only the description text.
         due_date_prompt:
@@ -76,9 +79,21 @@ blueprint:
             text:
               multiline: true
           default: >-
-            This argument is optional (used only for add).
+            This argument is optional (used for add, update_item).
+            For update_item: Always call get_items first to retrieve the due date and other details from the list.
             Return the due date in YYYY-MM-DD format.
             If not provided, leave blank.
+        item_uid_prompt:
+          name: Item UID Prompt
+          description: The prompt for the LLM to provide the item UID (unique identifier).
+          selector:
+            text:
+              multiline: true
+          default: >-
+            This argument is required for remove_item and update_item actions.
+            Always call get_items first to retrieve the UID of the to-do item to remove or update.
+            Provide the UID of the to-do item to remove or update.
+            Return only the UID value.
 mode: queued
 max: 30
 max_exceeded: silent
@@ -87,7 +102,7 @@ variables:
 fields:
   todo_entity:
     name: To-Do List Entity
-    description: The entity_id of the to-do list (e.g. todo.personal_tasks)
+    description: !input action_type_prompt
     selector:
       entity:
         domain: todo
@@ -101,6 +116,9 @@ fields:
           - add
           - delete
           - get
+          - remove_item
+          - remove_completed_items
+          - update_item
     required: true
   item_summary:
     name: Item Summary
@@ -120,28 +138,35 @@ fields:
     selector:
       text:
     required: false
+  item_uid:
+    name: Item UID
+    description: !input item_uid_prompt
+    selector:
+      text:
+    required: false
 sequence:
   - variables:
       todo_entity: "{{ todo_entity | default('') | trim }}"
-      action_type: "{{ action_type | default('') | trim }}"
+      action_type: "{{ action_type | default('get') | trim }}"
       item_summary: "{{ item_summary | default('') | trim }}"
       item_description: "{{ item_description | default('') | trim }}"
       due_date: "{{ due_date | default('') | trim }}"
+      item_uid: "{{ item_uid | default('') | trim }}"
   - alias: Check if variables were set correctly
     if:
       - condition: template
         value_template: >-
           {{
             (not todo_entity)
-            or (action_type not in ['add', 'delete', 'get'])
-            or (action_type in ['add', 'delete'] and not item_summary)
+            or (action_type not in ['add', 'delete', 'get', 'remove_item', 'remove_completed_items', 'update_item'])
+            or ((action_type in ['add', 'delete', 'remove_item', 'update_item']) and not item_summary and not item_uid)
           }}
     then:
       - alias: Set variable for error message
         variables:
           response:
             error: >-
-              Unable to process to-do list because one or more inputs are missing or invalid (todo_entity, action_type, item_summary).
+              Unable to process to-do list because one or more inputs are missing or invalid (todo_entity, action_type, item_summary/item_uid).
       - alias: Stop the script
         stop: Unable to process to-do list due to invalid inputs.
         response_variable: response
@@ -202,6 +227,67 @@ sequence:
                         message: "Item not found for deletion."
                   - stop: ""
                     response_variable: response
+      - conditions:
+          - condition: template
+            value_template: "{{ action_type == 'remove_item' }}"
+        sequence:
+          - choose:
+              - conditions:
+                  - condition: template
+                    value_template: "{{ item_uid != '' }}"
+                sequence:
+                  - service: todo.remove_item
+                    target:
+                      entity_id: "{{ todo_entity }}"
+                    data:
+                      item: "{{ item_uid }}"
+                  - variables:
+                      response:
+                        status: "success"
+                        message: "Item removed successfully"
+                  - stop: ""
+                    response_variable: response
+              - conditions:
+                  - condition: template
+                    value_template: "{{ item_uid == '' }}"
+                sequence:
+                  - variables:
+                      response:
+                        status: "error"
+                        message: "Item UID not provided for removal."
+                  - stop: ""
+                    response_variable: response
+      - conditions:
+          - condition: template
+            value_template: "{{ action_type == 'remove_completed_items' }}"
+        sequence:
+          - service: todo.remove_completed_items
+            target:
+              entity_id: "{{ todo_entity }}"
+          - variables:
+              response:
+                status: "success"
+                message: "Completed items removed successfully"
+          - stop: ""
+            response_variable: response
+      - conditions:
+          - condition: template
+            value_template: "{{ action_type == 'update_item' }}"
+        sequence:
+          - service: todo.update_item
+            target:
+              entity_id: "{{ todo_entity }}"
+            data:
+              item: "{{ item_uid }}"
+              summary: "{{ item_summary }}"
+              description: "{{ item_description }}"
+              due_date: "{{ due_date }}"
+          - variables:
+              response:
+                status: "success"
+                message: "Item updated successfully"
+          - stop: ""
+            response_variable: response
       - conditions:
           - condition: template
             value_template: "{{ action_type == 'get' }}"
