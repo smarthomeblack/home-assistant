@@ -1,0 +1,116 @@
+blueprint:
+  name: To-Do List Manager
+  author: GitHub Copilot
+  description: >-
+    Blueprint script to create, delete, and get information from a Home Assistant to-do list.
+    Allows adding, removing, and listing tasks using the Home Assistant todo integration.
+  domain: script
+  homeassistant:
+    min_version: 2024.10.0
+  input:
+    todo_settings:
+      name: To-Do List Settings
+      icon: mdi:format-list-checkbox
+      description: Configure the target to-do list entity.
+      input:
+        todo_entity:
+          name: To-Do List Entity
+          description: The entity_id of the to-do list (e.g. todo.personal_tasks)
+          selector:
+            entity:
+              domain: todo
+    action_settings:
+      name: Action Settings
+      icon: mdi:play-circle
+      description: Choose the action and provide details.
+      input:
+        action_type:
+          name: Action Type
+          description: Select the type of action to perform.
+          selector:
+            select:
+              options:
+                - label: Add Item
+                  value: add
+                - label: Delete Item
+                  value: delete
+                - label: Get Items
+                  value: get
+          default: get
+        item_summary:
+          name: Item Summary
+          description: The name/summary of the to-do item (required for add/delete).
+          selector:
+            text:
+        item_description:
+          name: Item Description
+          description: Description for the to-do item (optional, for add).
+          selector:
+            text:
+        due_date:
+          name: Due Date
+          description: Due date for the to-do item (YYYY-MM-DD, optional, for add).
+          selector:
+            text:
+sequence:
+  - variables:
+      todo_entity: "{{ todo_entity | default('') | trim }}"
+      action_type: "{{ action_type | default('get') | trim }}"
+      item_summary: "{{ item_summary | default('') | trim }}"
+      item_description: "{{ item_description | default('') | trim }}"
+      due_date: "{{ due_date | default('') | trim }}"
+  - choose:
+      - conditions:
+          - condition: template
+            value_template: "{{ action_type == 'add' }}"
+        sequence:
+          - action: todo.add_item
+            target:
+              entity_id: "{{ todo_entity }}"
+            data:
+              item: "{{ item_summary }}"
+              description: "{{ item_description }}"
+              due_date: "{{ due_date }}"
+      - conditions:
+          - condition: template
+            value_template: "{{ action_type == 'delete' }}"
+        sequence:
+          - service: todo.get_items
+            target:
+              entity_id: "{{ todo_entity }}"
+            response_variable: todo_items
+          - variables:
+              item_uid: >-
+                {% set found = todo_items[todo_entity]['items'] | selectattr('summary', 'equalto', item_summary) | list %}
+                {% if found and found[0] %}{{ found[0]['uid'] }}{% else %}{{ '' }}{% endif %}
+          - choose:
+              - conditions:
+                  - condition: template
+                    value_template: "{{ item_uid != '' }}"
+                sequence:
+                  - action: todo.update_item
+                    target:
+                      entity_id: "{{ todo_entity }}"
+                    data:
+                      item: "{{ item_uid }}"
+                      status: completed
+              - conditions:
+                  - condition: template
+                    value_template: "{{ item_uid == '' }}"
+                sequence:
+                  - variables:
+                      response:
+                        error: "Item not found for deletion."
+      - conditions:
+          - condition: template
+            value_template: "{{ action_type == 'get' }}"
+        sequence:
+          - service: todo.get_items
+            target:
+              entity_id: "{{ todo_entity }}"
+            response_variable: todo_items
+          - variables:
+              response:
+                items: "{{ todo_items[todo_entity]['items'] }}"
+  - stop: ""
+    response_variable: response
