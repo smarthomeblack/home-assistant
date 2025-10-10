@@ -43,15 +43,84 @@ blueprint:
             text:
               multiline: true
           default: >-
-            This argument is mandatory and must always be provided.
-            Return exactly one of the following options: add_item, get_items, remove_item, remove_completed_items, update_item.
-            Return only the word, without quotes or extra text.
-            - add_item: Add a new to-do item
-            - get_items: Get list of to-do items (all or filtered by status)
-            - remove_item: Permanently delete a specific item (requires item_uid)
-            - remove_completed_items: Remove all completed items
-            - update_item: Update an existing item (requires item_uid)
-            For remove_item and update_item: Always call get_items first to retrieve the UID of the target item.
+            ⚠️ CRITICAL WORKFLOW - CONFIRMATION RULES ⚠️
+            
+            ACTIONS REQUIRING CONFIRMATION (STEPS 1-2-3):
+            For add_item, remove_item, remove_completed_items, update_item:
+            
+            STEP 1: PARSE the user's request and extract all information
+            STEP 2: ALWAYS CONFIRM with user BEFORE executing (MANDATORY)
+            STEP 3: EXECUTE only after user explicitly confirms
+            
+            ACTIONS NOT REQUIRING CONFIRMATION:
+            For get_items: Execute immediately without confirmation (read-only operation)
+            
+            ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+            CONFIRMATION TEMPLATES FOR EACH ACTION:
+            ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+            
+            1. ADD_ITEM (Requires Confirmation):
+               Show in Vietnamese:
+               "I will add a new task:
+                📝 Name: [task_name]
+                📄 Description: [description] (if provided)
+                ⏰ Time: [formatted_date_time]
+                Do you confirm?"
+               Wait for user confirmation before executing.
+            
+            2. GET_ITEMS (NO Confirmation Needed):
+               Execute immediately and display results.
+               No confirmation step required.
+            
+            3. REMOVE_ITEM (Requires Confirmation - CRITICAL):
+               First call get_items to retrieve item details.
+               Show in Vietnamese:
+               "⚠️ PERMANENTLY DELETE this task:
+                📝 Name: [task_name]
+                ⏰ Time: [due_date_time]
+                📊 Status: [status]
+                ⚠️ THIS CANNOT BE UNDONE!
+                Type 'DELETE' or 'CONFIRM' to proceed."
+               Only execute if user types exact confirmation words.
+            
+            4. REMOVE_COMPLETED_ITEMS (Requires Confirmation - CRITICAL):
+               First call get_items to count completed items.
+               Show in Vietnamese:
+               "⚠️ DELETE ALL completed tasks:
+                📊 [count] tasks will be deleted
+                🚨 WARNING: THIS CANNOT BE UNDONE!
+                Type 'DELETE ALL' to confirm."
+               Require exact phrase 'DELETE ALL' to proceed.
+            
+            5. UPDATE_ITEM (Requires Confirmation):
+               First call get_items to retrieve current values.
+               Show in Vietnamese:
+               "I will update the task:
+                📝 Name: [old_name] → [new_name] (if changed)
+                ⏰ Time: [old_time] → [new_time] (if changed)
+                📊 Status: [old_status] → [new_status] (if changed)
+                📄 Description: [new_description] (if changed)
+                Do you confirm these changes?"
+               Wait for user confirmation before executing.
+            
+            ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+            IMPORTANT RULES:
+            ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+            - NEVER execute write operations without explicit user confirmation
+            - GET operations do NOT require confirmation (read-only)
+            - If user says "no"/"cancel"/"stop" → DO NOT execute, cancel immediately
+            - For DELETE actions: Require exact confirmation phrases
+            - Always show parsed information clearly in confirmation messages
+            - Wait for user response before proceeding to execution step
+            
+            Return exactly one of: add_item, get_items, remove_item, remove_completed_items, update_item
+            
+            ACTION DESCRIPTIONS:
+            - add_item: Add a new to-do item (requires confirmation)
+            - get_items: Retrieve list of to-do items - NO confirmation needed
+            - remove_item: Permanently delete a specific item (requires confirmation + item_uid)
+            - remove_completed_items: Remove all completed items (requires confirmation)
+            - update_item: Update an existing item (requires confirmation + item_uid)
         task_name_prompt:
           name: Task Name Prompt
           description: The prompt for the LLM to provide the task name when adding new item.
@@ -60,15 +129,23 @@ blueprint:
               multiline: true
           default: >-
             Required for: add_item
-            Extract ONLY the core task name from user's request.
-            IMPORTANT: Remove ALL time/date information from the task name.
-            Time/date info should go to due_date or due_datetime fields, NOT in task name.
+            
+            Extract ONLY the core task name from the user's request.
+            CRITICAL: Remove ALL time/date information from the task name.
+            Time/date information belongs in due_date or due_datetime fields, NOT in task name.
+            
             Examples:
-            - User: "Thêm rửa bát cho vợ vào 14h ngày mai" → task_name: "Rửa bát cho vợ"
-            - User: "Nhắc tôi mua sữa lúc 8h sáng" → task_name: "Mua sữa"
-            - User: "Họp với sếp ngày 15/10" → task_name: "Họp với sếp"
-            No extra commentary, no markdown or emojis.
-            Return only the clean task name without time/date.
+            - User: "Add wash dishes for wife at 2pm tomorrow" 
+              → task_name: "Wash dishes for wife"
+            - User: "Remind me to buy milk at 8am" 
+              → task_name: "Buy milk"
+            - User: "Meeting with boss on October 15" 
+              → task_name: "Meeting with boss"
+            - User: "Call customer at 3pm Monday"
+              → task_name: "Call customer"
+            
+            Return only the clean task name without any time/date references.
+            No extra commentary, no markdown, no emojis.
         item_uid_prompt:
           name: Item UID Prompt
           description: The prompt for the LLM to provide the item UID for removal or update.
@@ -77,9 +154,20 @@ blueprint:
               multiline: true
           default: >-
             Required for: remove_item, update_item
-            Always call get_items first to retrieve the UID of the target item.
-            The UID is a long unique identifier (e.g., 6901dc38-a61a-11f0-ad85-bc24112f1158).
-            Return only the UID value, no extra text.
+            
+            WORKFLOW:
+            1. Always call get_items FIRST to retrieve the list of items
+            2. Parse the response to find the target item
+            3. Extract the UID from the matching item
+            4. Return only the UID value
+            
+            The UID is a long unique identifier (example: 6901dc38-a61a-11f0-ad85-bc24112f1158).
+            
+            If multiple items have the same name:
+            - Use additional context from user (date, status, description) to identify the correct one
+            - If still ambiguous, ask user to clarify which specific item
+            
+            Return only the UID string, no extra text or formatting.
         task_description_prompt:
           name: Task Description Prompt
           description: The prompt for the LLM to provide the task description.
@@ -88,10 +176,25 @@ blueprint:
               multiline: true
           default: >-
             Optional for: add_item, update_item
-            Provide detailed information about the to-do item if user requests it.
-            If user doesn't provide description, leave blank.
-            No links, no markdown/emojis, no additional commentary.
-            Return only the description text.
+            
+            Provide detailed information about the to-do item if the user specifies it.
+            If the user doesn't provide additional details, leave this field blank.
+            
+            Examples:
+            - User: "Add go to market to buy vegetables and fruits for the whole week"
+              → description: "Buy vegetables and fruits for the whole week"
+            - User: "Add meeting with boss" (no additional details)
+              → description: (leave blank)
+            - User: "Add call customer to discuss the new contract terms"
+              → description: "Discuss the new contract terms"
+            
+            Do NOT include:
+            - Links or URLs
+            - Markdown formatting
+            - Emojis
+            - Any additional commentary
+            
+            Return only the plain description text.
         due_date_prompt:
           name: Due Date Prompt
           description: The prompt for the LLM to provide the due date.
@@ -100,23 +203,29 @@ blueprint:
               multiline: true
           default: >-
             Optional for: add_item, update_item
-            CRITICAL: Analyze user's request carefully to determine if they specify a TIME or just a DATE.
+            
+            ⚠️ CRITICAL DECISION: Analyze the user's request to determine if they specify TIME or just DATE.
             
             USE THIS FIELD (due_date) ONLY IF:
-            - User mentions only a date WITHOUT specific time
-            - Examples: "ngày mai", "thứ 2 tuần sau", "15/10", "cuối tháng"
+            - User mentions ONLY a date WITHOUT any specific time
+            - Date-only keywords: "tomorrow", "next Monday", "October 15", "end of month", "today"
             
-            DO NOT USE this field if user mentions TIME:
-            - "14h", "8 giờ sáng", "3h chiều", "lúc 10h" → Use due_datetime instead
+            DO NOT USE this field if user mentions ANY TIME:
+            - Time keywords: "2pm", "8 o'clock", "afternoon", "evening", "morning", "noon", "at"
+            - If ANY time keyword detected → Use due_datetime field instead, leave this blank
             
-            Format: YYYY-MM-DD (e.g., 2025-10-11)
-            Calculate dates from current date (today is Saturday, October 11, 2025):
-            - "ngày mai" = 2025-10-12
-            - "hôm nay" = 2025-10-11
-            - "thứ 2" = next Monday
+            FORMAT: YYYY-MM-DD (example: 2025-10-11)
             
-            If user specifies time, leave this field BLANK and use due_datetime instead.
-            Never provide both due_date and due_datetime at the same time.
+            DATE CALCULATIONS (Current date: Saturday, October 11, 2025):
+            - "today" → 2025-10-11
+            - "tomorrow" → 2025-10-12
+            - "Monday" / "next Monday" → 2025-10-13
+            - "next week" → add 7 days
+            - "next month" → next month same day
+            - "October 15" → 2025-10-15
+            
+            RULE: Never provide both due_date and due_datetime simultaneously.
+            If user specifies ANY time, leave this field BLANK and use due_datetime instead.
         due_datetime_prompt:
           name: Due Datetime Prompt
           description: The prompt for the LLM to provide the due datetime.
@@ -125,31 +234,47 @@ blueprint:
               multiline: true
           default: >-
             Optional for: add_item, update_item
-            CRITICAL: Use this field ONLY when user specifies BOTH date AND time.
+            
+            ⚠️ CRITICAL DECISION: Use this field ONLY when user specifies BOTH date AND time.
             
             USE THIS FIELD (due_datetime) WHEN user mentions TIME:
-            - "14h ngày mai", "8 giờ sáng thứ 2", "3h chiều hôm nay", "lúc 10h"
-            - Parse the time and date, then combine them
+            - Time keywords: "2pm", "8 o'clock", "afternoon", "morning", "noon", "evening", "night", "at"
+            - Examples: "2pm tomorrow", "8am Monday", "3pm today", "tomorrow evening"
             
-            DO NOT USE this field if user only mentions date without time:
-            - "ngày mai", "thứ 2", "15/10" → Use due_date instead
+            DO NOT USE this field if user ONLY mentions date without time:
+            - "tomorrow", "Monday", "October 15" → Use due_date instead, leave this blank
             
-            Format: YYYY-MM-DD HH:MM:SS (24-hour format)
-            Examples:
-            - "14h ngày mai" → "2025-10-12 14:00:00"
-            - "8 giờ sáng" → "2025-10-11 08:00:00" (assume today)
-            - "3h chiều thứ 2" → "2025-10-13 15:00:00"
-            - "10h tối" → "2025-10-11 22:00:00"
+            FORMAT: YYYY-MM-DD HH:MM:SS (24-hour format)
             
-            Time conversion:
-            - Sáng (morning): 06:00-11:00
-            - Trưa (noon): 12:00
-            - Chiều (afternoon): 13:00-17:00
-            - Tối (evening): 18:00-22:00
-            - Đêm (night): 23:00-05:00
+            EXAMPLES:
+            - "2pm tomorrow" → "2025-10-12 14:00:00"
+            - "8am today" → "2025-10-11 08:00:00"
+            - "3pm Monday" → "2025-10-13 15:00:00"
+            - "10pm tonight" → "2025-10-11 22:00:00"
+            - "tomorrow morning" → "2025-10-12 08:00:00" (use default morning time)
             
+            TIME CONVERSION GUIDE (Natural language to 24-hour):
+            English keywords:
+            - "morning" → 06:00-11:00 (default: 08:00)
+            - "noon" → 12:00
+            - "afternoon" → 13:00-17:00 (default: 15:00)
+            - "evening" → 18:00-22:00 (default: 19:00)
+            - "night" → 23:00-05:00 (default: 23:00)
+            
+            Vietnamese keywords (if user uses Vietnamese):
+            - "sáng" (morning) → default 08:00
+            - "trưa" (noon) → 12:00
+            - "chiều" (afternoon) → default 15:00
+            - "tối" (evening) → default 19:00
+            - "đêm" (night) → default 23:00
+            
+            SPECIFIC HOURS:
+            - "1-12 o'clock" without am/pm → infer from context or use 24-hour if specified
+            - "1pm-11pm" → 13:00-23:00
+            - "1am-11am" → 01:00-11:00
+            
+            RULE: Never provide both due_date and due_datetime simultaneously.
             If user provides only date (no time), leave this field BLANK and use due_date instead.
-            Never provide both due_date and due_datetime at the same time.
         rename_prompt:
           name: Rename Prompt
           description: The prompt for the LLM to provide the new task name when updating.
@@ -157,10 +282,23 @@ blueprint:
             text:
               multiline: true
           default: >-
-            Optional for: update_item only
-            If user wants to rename the task, provide the new name.
-            If user doesn't want to rename, leave blank.
-            Return only the new task name, no extra text.
+            Optional for: update_item ONLY
+            
+            Provide the new name for the to-do item ONLY if the user explicitly wants to rename it.
+            If the user is only changing other properties (time, status, description), leave this field blank.
+            
+            Examples:
+            - User: "Rename task 'Meeting with boss' to 'Meeting with director'"
+              → rename: "Meeting with director"
+            - User: "Change shopping task to 3pm" (only changing time, not name)
+              → rename: (leave blank)
+            - User: "Update buy milk task to buy milk and bread"
+              → rename: "Buy milk and bread"
+            - User: "Mark washing dishes as completed" (only changing status)
+              → rename: (leave blank)
+            
+            Return only the new task name.
+            No extra text, no markdown, no emojis.
         status_prompt:
           name: Status Prompt
           description: The prompt for the LLM to provide the task status.
@@ -169,14 +307,38 @@ blueprint:
               multiline: true
           default: >-
             Optional for: update_item, get_items
-            For update_item: Provide the status if user wants to change it.
-            - needs_action: Task not completed yet
-            - completed: Task is completed
-            For get_items: Filter items by status (can provide multiple values separated by comma).
-            - needs_action: Get only incomplete tasks
-            - completed: Get only completed tasks
-            - Leave blank: Get all tasks
-            If not changing status (for update_item) or not filtering (for get_items), leave blank.
+            
+            FOR UPDATE_ITEM:
+            Provide the new status ONLY if the user explicitly wants to change it.
+            - "needs_action" → Task is NOT completed yet (pending/in-progress)
+            - "completed" → Task is completed/done/finished
+            If user is only changing other properties, leave this field blank.
+            
+            Examples:
+            - User: "Mark washing dishes as completed"
+              → status: "completed"
+            - User: "Change meeting task to incomplete"
+              → status: "needs_action"
+            - User: "Move shopping to 3pm" (only changing time)
+              → status: (leave blank)
+            
+            FOR GET_ITEMS:
+            Filter items by status. Can provide single or multiple values (comma-separated).
+            - "needs_action" → Retrieve only incomplete/pending tasks
+            - "completed" → Retrieve only completed/finished tasks
+            - "needs_action,completed" → Retrieve both types (all tasks)
+            - Leave blank → Retrieve all tasks regardless of status
+            
+            Examples:
+            - User: "Show me incomplete tasks"
+              → status: "needs_action"
+            - User: "List all completed tasks"
+              → status: "completed"
+            - User: "Show all tasks"
+              → status: (leave blank or "needs_action,completed")
+            
+            Return only the status value(s): "needs_action" or "completed" or "needs_action,completed"
+            No extra text or formatting.
 mode: queued
 max: 30
 max_exceeded: silent
