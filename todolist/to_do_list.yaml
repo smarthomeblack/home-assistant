@@ -103,6 +103,30 @@ blueprint:
             Always call get_items first to retrieve the UID of the to-do item to remove or update.
             Provide the UID of the to-do item to remove or update.
             Return only the UID value.
+        rename_prompt:
+          name: Rename Prompt
+          description: The prompt for the LLM to provide the new summary (rename) for the item when updating.
+          selector:
+            text:
+              multiline: true
+          default: >-
+            This argument is optional (used for update_item).
+            Provide the new summary for the to-do item if you want to rename it.
+            If not renaming, leave blank.
+            Return only the new summary text.
+        status_prompt:
+          name: Status Prompt
+          description: The prompt for the LLM to provide the status for the item (needs_action, completed, etc.).
+          selector:
+            text:
+              multiline: true
+          default: >-
+            This argument is optional (used for update_item).
+            Provide the status for the to-do item (needs_action, completed).
+            needs_action: Not completed.
+            completed: Completed.
+            If not changing status, leave blank.
+            Return only the status value.
 mode: queued
 max: 30
 max_exceeded: silent
@@ -159,6 +183,21 @@ fields:
     selector:
       text:
     required: false
+  rename:
+    name: Rename
+    description: !input rename_prompt
+    selector:
+      text:
+    required: false
+  status:
+    name: Status
+    description: !input status_prompt
+    selector:
+      select:
+        options:
+          - needs_action
+          - completed
+    required: false
 sequence:
   - variables:
       todo_entity: !input todo_entity
@@ -168,6 +207,8 @@ sequence:
       due_date: "{{ due_date | default('') | trim }}"
       due_datetime: "{{ due_datetime | default('') | trim }}"
       item_uid: "{{ item_uid | default('') | trim }}"
+      rename: "{{ rename | default('') | trim }}"
+      status: "{{ status | default('') | trim }}"
   - alias: Check if variables were set correctly
     if:
       - condition: template
@@ -312,17 +353,25 @@ sequence:
           - condition: template
             value_template: "{{ action_type == 'update_item' }}"
         sequence:
+          - service: todo.get_items
+            target:
+              entity_id: !input todo_entity
+          - variables:
+              item_uid: >-
+                {% set found = todo_items[todo_entity]['items'] | selectattr('summary', 'equalto', item_summary) | list %}
+                {% if found and found[0] %}{{ found[0]['uid'] }}{% else %}{{ '' }}{% endif %}
           - choose:
               - conditions:
                   - condition: template
-                    value_template: "{{ due_datetime | length > 0 }}"
+                    value_template: "{{ item_uid != '' and due_datetime | length > 0 }}"
                 sequence:
                   - service: todo.update_item
                     target:
                       entity_id: !input todo_entity
                     data:
                       item: "{{ item_uid }}"
-                      summary: "{{ item_summary }}"
+                      rename: "{{ item_summary }}"
+                      status: "{{ status | default('needs_action') }}"
                       description: "{{ item_description }}"
                       due_datetime: "{{ due_datetime }}"
                   - variables:
@@ -333,20 +382,31 @@ sequence:
                     response_variable: response
               - conditions:
                   - condition: template
-                    value_template: "{{ due_date | length > 0 }}"
+                    value_template: "{{ item_uid != '' and due_date | length > 0 }}"
                 sequence:
                   - service: todo.update_item
                     target:
                       entity_id: !input todo_entity
                     data:
                       item: "{{ item_uid }}"
-                      summary: "{{ item_summary }}"
+                      rename: "{{ item_summary }}"
+                      status: "{{ status | default('needs_action') }}"
                       description: "{{ item_description }}"
                       due_date: "{{ due_date }}"
                   - variables:
                       response:
                         status: "success"
                         message: "Item updated successfully"
+                  - stop: ""
+                    response_variable: response
+              - conditions:
+                  - condition: template
+                    value_template: "{{ item_uid == '' }}"
+                sequence:
+                  - variables:
+                      response:
+                        status: "error"
+                        message: "Item not found for update."
                   - stop: ""
                     response_variable: response
       - conditions:
