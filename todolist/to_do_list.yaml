@@ -1,9 +1,10 @@
 blueprint:
   name: To-Do List Manager
   author: GitHub Copilot
-  description: >-
-    Blueprint script to create, delete, and get information from a Home Assistant to-do list.
+  description: |
+    Blueprint script to create, delete, and get items from a Home Assistant to-do list.
     Allows adding, removing, and listing tasks using the Home Assistant todo integration.
+    All prompts, field names, and descriptions are in English for compatibility and clarity.
   domain: script
   homeassistant:
     min_version: 2024.10.0
@@ -11,22 +12,37 @@ blueprint:
     todo_settings:
       name: To-Do List Settings
       icon: mdi:format-list-checkbox
-      description: Configure the target to-do list entity.
+      description: |
+        Select the to-do list entity to manage. LLM must provide the correct entity_id (e.g., todo.personal_tasks or todo.viec_can_lam).
+        If unsure, check the entity in Home Assistant before filling in.
       input:
         todo_entity:
           name: To-Do List Entity
-          description: The entity_id of the to-do list (e.g. todo.personal_tasks)
+          description: |
+            Enter the entity_id of the to-do list.
+            LLM must select an entity that exists in Home Assistant.
+            Example: todo.personal_tasks, todo.viec_can_lam.
           selector:
             entity:
               domain: todo
     action_settings:
       name: Action Settings
       icon: mdi:play-circle
-      description: Choose the action and provide details.
+      description: |
+        Select the action type and fill in the required details for each action.
+        LLM must choose the correct action_type (add, delete, get) and fill in the appropriate fields:
+        - add: fill item_summary, item_description, due_date
+        - delete: fill item_summary
+        - get: no additional fields required
       input:
         action_type:
           name: Action Type
-          description: Select the type of action to perform.
+          description: |
+            Choose the type of action:
+            - add: add a new to-do item
+            - delete: delete a to-do item
+            - get: get the list of to-do items
+            LLM must select the correct value for the intended purpose.
           selector:
             select:
               options:
@@ -39,22 +55,69 @@ blueprint:
           default: get
         item_summary:
           name: Item Summary
-          description: The name/summary of the to-do item (required for add/delete).
+          description: |
+            The name/summary of the to-do item.
+            LLM must fill this when action_type is add or delete.
+            Example: "Go to market at 6am", "Exercise at 6pm".
           selector:
             text:
           required: false
         item_description:
           name: Item Description
-          description: Description for the to-do item (optional, for add).
+          description: |
+            Detailed description for the to-do item (used only when adding).
+            LLM may fill or leave blank.
+            Example: "Buy vegetables, meat, fish..."
           selector:
             text:
           required: false
         due_date:
           name: Due Date
-          description: Due date for the to-do item (YYYY-MM-DD, optional, for add).
+          description: |
+            Due date (YYYY-MM-DD, used only when adding).
+            LLM may fill or leave blank.
+            Example: "2025-10-12"
           selector:
             text:
           required: false
+mode: queued
+max: 30
+max_exceeded: silent
+variables:
+  version: 20251011
+fields:
+  todo_entity:
+    name: To-Do List Entity
+    description: The entity_id of the to-do list (e.g. todo.personal_tasks)
+    selector:
+      entity:
+        domain: todo
+    required: true
+  action_type:
+    name: Action Type
+    description: Select the type of action to perform.
+    selector:
+      select:
+        options:
+          - add
+          - delete
+          - get
+    required: true
+  item_summary:
+    name: Item Summary
+    description: The name/summary of the to-do item (required for add/delete).
+    selector:
+      text:
+  item_description:
+    name: Item Description
+    description: Description for the to-do item (optional, for add).
+    selector:
+      text:
+  due_date:
+    name: Due Date
+    description: Due date for the to-do item (YYYY-MM-DD, optional, for add).
+    selector:
+      text:
 sequence:
   - variables:
       todo_entity: "{{ todo_entity | default('') | trim }}"
@@ -67,13 +130,19 @@ sequence:
           - condition: template
             value_template: "{{ action_type == 'add' }}"
         sequence:
-          - action: todo.add_item
+          - service: todo.add_item
             target:
               entity_id: "{{ todo_entity }}"
             data:
               item: "{{ item_summary }}"
               description: "{{ item_description }}"
               due_date: "{{ due_date }}"
+          - variables:
+              response:
+                status: "success"
+                message: "Item added successfully"
+          - stop: ""
+            response_variable: response
       - conditions:
           - condition: template
             value_template: "{{ action_type == 'delete' }}"
@@ -91,19 +160,28 @@ sequence:
                   - condition: template
                     value_template: "{{ item_uid != '' }}"
                 sequence:
-                  - action: todo.update_item
+                  - service: todo.update_item
                     target:
                       entity_id: "{{ todo_entity }}"
                     data:
                       item: "{{ item_uid }}"
                       status: completed
+                  - variables:
+                      response:
+                        status: "success"
+                        message: "Item deleted successfully"
+                  - stop: ""
+                    response_variable: response
               - conditions:
                   - condition: template
                     value_template: "{{ item_uid == '' }}"
                 sequence:
                   - variables:
                       response:
-                        error: "Item not found for deletion."
+                        status: "error"
+                        message: "Item not found for deletion."
+                  - stop: ""
+                    response_variable: response
       - conditions:
           - condition: template
             value_template: "{{ action_type == 'get' }}"
@@ -115,5 +193,7 @@ sequence:
           - variables:
               response:
                 items: "{{ todo_items[todo_entity]['items'] }}"
-  - stop: ""
-    response_variable: response
+                status: "success"
+                message: "Items fetched successfully"
+          - stop: ""
+            response_variable: response
