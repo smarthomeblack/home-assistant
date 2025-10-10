@@ -1,6 +1,6 @@
 blueprint:
   name: To-Do List Manager
-  author: GitHub Copilot
+  author: smarthomeblack
   description: |
     Blueprint script to create, delete, and get items from a Home Assistant to-do list.
     Allows adding, removing, and listing tasks using the Home Assistant todo integration.
