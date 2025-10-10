@@ -79,10 +79,19 @@ blueprint:
             text:
               multiline: true
           default: >-
-            This argument is optional (used for add, update_item).
-            For update_item: Always call get_items first to retrieve the due date and other details from the list.
-            Return the due date in YYYY-MM-DD format.
-            If not provided, leave blank.
+            Nếu chỉ có ngày, trả về ngày theo định dạng YYYY-MM-DD và chỉ truyền vào trường due_date.
+            Nếu có cả ngày và giờ, không trả về giá trị cho trường này, hãy dùng trường due_datetime.
+            Không được truyền cả hai trường cùng lúc.
+        due_datetime_prompt:
+          name: Due Datetime Prompt
+          description: The prompt for the LLM to provide the due datetime.
+          selector:
+            text:
+              multiline: true
+          default: >-
+            Nếu có cả ngày và giờ, trả về giá trị theo định dạng YYYY-MM-DDTHH:MM:SS và chỉ truyền vào trường due_datetime.
+            Nếu chỉ có ngày, không trả về giá trị cho trường này, hãy dùng trường due_date.
+            Không được truyền cả hai trường cùng lúc.
         item_uid_prompt:
           name: Item UID Prompt
           description: The prompt for the LLM to provide the item UID (unique identifier).
@@ -138,6 +147,12 @@ fields:
     selector:
       text:
     required: false
+  due_datetime:
+    name: Due Datetime
+    description: !input due_datetime_prompt
+    selector:
+      text:
+    required: false
   item_uid:
     name: Item UID
     description: !input item_uid_prompt
@@ -151,6 +166,7 @@ sequence:
       item_summary: "{{ item_summary | default('') | trim }}"
       item_description: "{{ item_description | default('') | trim }}"
       due_date: "{{ due_date | default('') | trim }}"
+      due_datetime: "{{ due_datetime | default('') | trim }}"
       item_uid: "{{ item_uid | default('') | trim }}"
   - alias: Check if variables were set correctly
     if:
@@ -175,19 +191,41 @@ sequence:
           - condition: template
             value_template: "{{ action_type == 'add' }}"
         sequence:
-          - service: todo.add_item
-            target:
-              entity_id: !input todo_entity
-            data:
-              item: "{{ item_summary }}"
-              description: "{{ item_description }}"
-              due_date: "{{ due_date }}"
-          - variables:
-              response:
-                status: "success"
-                message: "Item added successfully"
-          - stop: ""
-            response_variable: response
+          - choose:
+              - conditions:
+                  - condition: template
+                    value_template: "{{ due_datetime | length > 0 }}"
+                sequence:
+                  - service: todo.add_item
+                    target:
+                      entity_id: !input todo_entity
+                    data:
+                      item: "{{ item_summary }}"
+                      description: "{{ item_description }}"
+                      due_datetime: "{{ due_datetime }}"
+                  - variables:
+                      response:
+                        status: "success"
+                        message: "Item added successfully"
+                  - stop: ""
+                    response_variable: response
+              - conditions:
+                  - condition: template
+                    value_template: "{{ due_date | length > 0 }}"
+                sequence:
+                  - service: todo.add_item
+                    target:
+                      entity_id: !input todo_entity
+                    data:
+                      item: "{{ item_summary }}"
+                      description: "{{ item_description }}"
+                      due_date: "{{ due_date }}"
+                  - variables:
+                      response:
+                        status: "success"
+                        message: "Item added successfully"
+                  - stop: ""
+                    response_variable: response
       - conditions:
           - condition: template
             value_template: "{{ action_type == 'delete' }}"
@@ -274,20 +312,43 @@ sequence:
           - condition: template
             value_template: "{{ action_type == 'update_item' }}"
         sequence:
-          - service: todo.update_item
-            target:
-              entity_id: !input todo_entity
-            data:
-              item: "{{ item_uid }}"
-              summary: "{{ item_summary }}"
-              description: "{{ item_description }}"
-              due_date: "{{ due_date }}"
-          - variables:
-              response:
-                status: "success"
-                message: "Item updated successfully"
-          - stop: ""
-            response_variable: response
+          - choose:
+              - conditions:
+                  - condition: template
+                    value_template: "{{ due_datetime | length > 0 }}"
+                sequence:
+                  - service: todo.update_item
+                    target:
+                      entity_id: !input todo_entity
+                    data:
+                      item: "{{ item_uid }}"
+                      summary: "{{ item_summary }}"
+                      description: "{{ item_description }}"
+                      due_datetime: "{{ due_datetime }}"
+                  - variables:
+                      response:
+                        status: "success"
+                        message: "Item updated successfully"
+                  - stop: ""
+                    response_variable: response
+              - conditions:
+                  - condition: template
+                    value_template: "{{ due_date | length > 0 }}"
+                sequence:
+                  - service: todo.update_item
+                    target:
+                      entity_id: !input todo_entity
+                    data:
+                      item: "{{ item_uid }}"
+                      summary: "{{ item_summary }}"
+                      description: "{{ item_description }}"
+                      due_date: "{{ due_date }}"
+                  - variables:
+                      response:
+                        status: "success"
+                        message: "Item updated successfully"
+                  - stop: ""
+                    response_variable: response
       - conditions:
           - condition: template
             value_template: "{{ action_type == 'get' }}"
