@@ -42,16 +42,19 @@ blueprint:
           description: The name/summary of the to-do item (required for add/delete).
           selector:
             text:
+          required: false
         item_description:
           name: Item Description
           description: Description for the to-do item (optional, for add).
           selector:
             text:
+          required: false
         due_date:
           name: Due Date
           description: Due date for the to-do item (YYYY-MM-DD, optional, for add).
           selector:
             text:
+          required: false
 sequence:
   - variables:
       todo_entity: "{{ todo_entity | default('') | trim }}"
