@@ -13,6 +13,6 @@ Nhấn vào nút dưới đây để import blueprint trực tiếp vào Home As
 [![Import To-Do List Manager Blueprint](https://my.home-assistant.io/badges/blueprint_import.svg)](https://my.home-assistant.io/redirect/blueprint_import/?blueprint_url=https://raw.githubusercontent.com/smarthomeblack/home-assistant/refs/heads/main/fancontrol/fan_control_speed_and_oscillation.yaml)
 
 ## 4. Hướng dẫn sử dụng
-
+- Sửa đổi danh sách quạt của bạn trong Entity ID Prompt
 - Trò chuyện với tác nhân AI để yêu cầu tăng tốc độ quạt, bật tắt xoay
 - Ví dụ: tăng tốc độ quạt phòng ngủ lên 60%, tăng tốc độ quạt phòng ngủ lên, tắt xoay quạt phòng ngủ đi,...
