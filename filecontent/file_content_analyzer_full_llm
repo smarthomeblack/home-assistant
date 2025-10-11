@@ -81,6 +81,24 @@ blueprint:
               filter:
                 domain: ai_task
           default:
+        ai_task_prompt:
+          name: AI Task Prompt
+          description: The system prompt that will be prepended to the user instructions for the AI Task.
+          selector:
+            text:
+              multiline: true
+          default: >-
+            ***System***
+
+            You are an expert in analyzing files, images, videos, audio, and documents.
+
+            If the user does not have specific requirements or does not require detailed analysis, then analyze briefly.
+
+            Always respond in the same language as the question.
+
+            Respond in plain text only; no Markdown, formatting or emojis. Diacritics and characters from the user's language are allowed.
+
+            Keep replies on a single line by replacing line breaks with spaces, but always preserve normal punctuation such as periods or semicolons to ensure natural sentence breaks.
     prompt_settings:
       name: Prompt settings for the LLM
       icon: mdi:robot
@@ -133,24 +151,6 @@ blueprint:
             Always specify the MIME type of the media.
 
             If the media source is 'camera', the MIME type must be set to 'application/vnd.apple.mpegurl'.
-        ai_task_prompt:
-          name: AI Task Prompt
-          description: The system prompt that will be prepended to the user instructions for the AI Task.
-          selector:
-            text:
-              multiline: true
-          default: >-
-            ***System***
-
-            You are an expert in analyzing files, images, videos, audio, and documents.
-
-            If the user does not have specific requirements or does not require detailed analysis, then analyze briefly.
-
-            Always respond in the same language as the question.
-
-            Respond in plain text only; no Markdown, formatting or emojis. Diacritics and characters from the user's language are allowed.
-
-            Keep replies on a single line by replacing line breaks with spaces, but always preserve normal punctuation such as periods or semicolons to ensure natural sentence breaks.
 mode: parallel
 max_exceeded: silent
 variables:
