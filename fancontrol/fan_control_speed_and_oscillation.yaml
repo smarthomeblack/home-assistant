@@ -17,6 +17,8 @@
     * Provide a concise and precise description for the script. This will be utilized by the LLM to understand it should use this script for controlling fans.
     * Make sure to expose the script to Assist after the script has been saved.
     * Do not alter the default script name.
+    * Edit your fan list in Entity ID Prompt
+
   domain: script
   homeassistant:
     min_version: 2024.10.0
