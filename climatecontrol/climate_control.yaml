@@ -1,0 +1,484 @@
+﻿blueprint:
+  name: Climate Control - Full Features
+  author: smarthomeblack
+  description: |
+    # Tool for controlling air conditioner with LLM integration
+    
+    ## Blueprint Setup
+    
+    ### Required
+    * The Home Assistant climate integration must be installed and configured.
+    * For Turbo and Econo modes, tasmota_irhvac integration is required.
+    
+    ### Optional
+    * Adjust the prompts for each field used in the script.
+    
+    ### Note
+    * Provide a concise and precise description for the script.
+    * Make sure to expose the script to Assist after the script has been saved.
+    * Do not alter the default script name.
+    * Edit your climate entity list in Entity ID Prompt
+
+  domain: script
+  homeassistant:
+    min_version: 2024.10.0
+  input:
+    prompt_settings:
+      name: Prompt settings for the LLM
+      icon: mdi:robot
+      description: You can use these settings to finetune the prompts for your specific LLM (model).
+      collapsed: true
+      input:
+        action_prompt:
+          name: Action Prompt
+          description: The prompt for the LLM to select the climate control action.
+          selector:
+            text:
+              multiline: true
+          default: >-
+            This argument is mandatory and must always be provided.
+            
+            Select ONE of the following climate control actions based on user request:
+            
+            1. **set_hvac_mode** - Set HVAC mode (heat, cool, heat_cool, auto, dry, fan_only)
+               Use when: User asks to change operating mode
+               Example requests:
+               - "Set AC to cooling mode"
+               - "Dat dieu hoa che do suoi"
+               - "Turn on heating"
+            
+            2. **set_swing_mode** - Set swing/oscillation mode (off, vertical, horizontal, both)
+               Use when: User asks to control air direction
+               Example requests:
+               - "Turn on vertical swing"
+               - "Bat xoay doc dieu hoa"
+               - "Stop swing"
+            
+            3. **set_fan_mode** - Set fan speed (low, medium, high, min, max, auto)
+               Use when: User asks to change fan speed
+               Example requests:
+               - "Set fan to high"
+               - "Dat toc do quat cao"
+               - "Auto fan"
+            
+            4. **set_turbo** - Control turbo/max power mode (on, off)
+               Use when: User asks to enable/disable turbo or maximum power
+               Example requests:
+               - "Turn on turbo mode"
+               - "Bat che do turbo"
+               - "Max power"
+            
+            5. **set_econo** - Control economy/power saving mode (on, off)
+               Use when: User asks to enable/disable economy mode
+               Example requests:
+               - "Turn on eco mode"
+               - "Bat che do tiet kiem"
+               - "Enable power saving"
+            
+            **IMPORTANT:**
+            - Always use lowercase for action value
+            - Action must be exactly one of: set_hvac_mode, set_swing_mode, set_fan_mode, set_turbo, set_econo
+        entity_id_prompt:
+          name: Entity ID Prompt
+          description: The prompt for the LLM to provide the climate entity_id.
+          selector:
+            text:
+              multiline: true
+          default: >-
+            This argument is mandatory and must always be provided.
+            
+            Enter the exact entity_id of the air conditioner you want to control.
+            
+            **Available air conditioners and their entity_ids:**
+            - Dieu hoa phong khach: climate.dieu_hoa_phong_khach
+            - Dieu hoa phong ngu: climate.dieu_hoa_phong_ngu
+            - Dieu hoa phong lam viec: climate.dieu_hoa
+            
+            **Format rules:**
+            - Must start with climate.
+            - Use lowercase
+            - Use underscores instead of spaces
+            
+            **Examples:**
+            - User says living room AC -> enter: climate.dieu_hoa_phong_khach
+            - User says dieu hoa phong ngu -> enter: climate.dieu_hoa_phong_ngu
+            - User says office AC -> enter: climate.dieu_hoa
+        hvac_mode_prompt:
+          name: HVAC Mode Prompt
+          description: The prompt for the LLM to provide the HVAC mode.
+          selector:
+            text:
+              multiline: true
+          default: >-
+            This argument is required ONLY for set_hvac_mode action.
+            Leave empty for other actions.
+            
+            Select the HVAC operating mode.
+            
+            **Available modes:**
+            - heat: Heating mode (Che do suoi)
+            - cool: Cooling mode (Che do lanh)
+            - heat_cool: Auto heat/cool (Tu dong suoi/lanh)
+            - auto: Auto mode (Che do tu dong)
+            - dry: Dehumidify mode (Che do hut am)
+            - fan_only: Fan only, no heating/cooling (Chi quat)
+            
+            **Examples:**
+            - User says turn on cooling -> enter: cool
+            - User says bat che do suoi -> enter: heat
+            - User says dehumidify -> enter: dry
+            - User says auto mode -> enter: auto
+            
+            **IMPORTANT:**
+            - Must be exactly one of: heat, cool, heat_cool, auto, dry, fan_only
+            - Always use lowercase
+        swing_mode_prompt:
+          name: Swing Mode Prompt
+          description: The prompt for the LLM to provide the swing mode.
+          selector:
+            text:
+              multiline: true
+          default: >-
+            This argument is required ONLY for set_swing_mode action.
+            Leave empty for other actions.
+            
+            Select the swing/oscillation mode for air direction.
+            
+            **Available modes:**
+            - off: No swing (Tat xoay)
+            - vertical: Vertical swing (Xoay doc)
+            - horizontal: Horizontal swing (Xoay ngang)
+            - both: Both vertical and horizontal (Xoay ca doc va ngang)
+            
+            **Examples:**
+            - User says turn on vertical swing -> enter: vertical
+            - User says xoay ngang -> enter: horizontal
+            - User says stop swing -> enter: off
+            - User says swing both directions -> enter: both
+            
+            **IMPORTANT:**
+            - Must be exactly one of: off, vertical, horizontal, both
+            - Always use lowercase
+        fan_mode_prompt:
+          name: Fan Mode Prompt
+          description: The prompt for the LLM to provide the fan mode.
+          selector:
+            text:
+              multiline: true
+          default: >-
+            This argument is required ONLY for set_fan_mode action.
+            Leave empty for other actions.
+            
+            Select the fan speed mode.
+            
+            **Available modes:**
+            - low: Low speed (Toc do thap)
+            - medium: Medium speed (Toc do trung binh)
+            - high: High speed (Toc do cao)
+            - min: Minimum speed (Toc do toi thieu)
+            - max: Maximum speed (Toc do toi da)
+            - auto: Auto adjust speed (Tu dong)
+            
+            **Examples:**
+            - User says set fan to high -> enter: high
+            - User says toc do thap -> enter: low
+            - User says max fan -> enter: max
+            - User says auto fan -> enter: auto
+            
+            **IMPORTANT:**
+            - Must be exactly one of: low, medium, high, min, max, auto
+            - Always use lowercase
+        turbo_prompt:
+          name: Turbo Mode Prompt
+          description: The prompt for the LLM to provide the turbo mode state.
+          selector:
+            text:
+              multiline: true
+          default: >-
+            This argument is required ONLY for set_turbo action.
+            Leave empty for other actions.
+            
+            Enable or disable turbo/maximum power mode.
+            
+            **Available values:**
+            - on: Enable turbo mode (Bat che do turbo)
+            - off: Disable turbo mode (Tat che do turbo)
+            
+            **Examples:**
+            - User says turn on turbo -> enter: on
+            - User says bat turbo -> enter: on
+            - User says disable turbo -> enter: off
+            - User says max power -> enter: on
+            
+            **IMPORTANT:**
+            - Must be exactly on or off (lowercase)
+            - Do not use true/false or 1/0
+        econo_prompt:
+          name: Econo Mode Prompt
+          description: The prompt for the LLM to provide the econo mode state.
+          selector:
+            text:
+              multiline: true
+          default: >-
+            This argument is required ONLY for set_econo action.
+            Leave empty for other actions.
+            
+            Enable or disable economy/power saving mode.
+            
+            **Available values:**
+            - on: Enable economy mode (Bat che do tiet kiem)
+            - off: Disable economy mode (Tat che do tiet kiem)
+            
+            **Examples:**
+            - User says turn on eco mode -> enter: on
+            - User says bat tiet kiem -> enter: on
+            - User says disable power saving -> enter: off
+            - User says eco off -> enter: off
+            
+            **IMPORTANT:**
+            - Must be exactly on or off (lowercase)
+            - Do not use true/false or 1/0
+mode: queued
+max: 10
+max_exceeded: silent
+variables:
+  version: 20250112
+fields:
+  action:
+    name: Action
+    description: !input action_prompt
+    selector:
+      text:
+    required: true
+  entity_id:
+    name: Entity ID
+    description: !input entity_id_prompt
+    selector:
+      text:
+    required: true
+  hvac_mode:
+    name: HVAC Mode
+    description: !input hvac_mode_prompt
+    selector:
+      text:
+  swing_mode:
+    name: Swing Mode
+    description: !input swing_mode_prompt
+    selector:
+      text:
+  fan_mode:
+    name: Fan Mode
+    description: !input fan_mode_prompt
+    selector:
+      text:
+  turbo:
+    name: Turbo Mode
+    description: !input turbo_prompt
+    selector:
+      text:
+  econo:
+    name: Econo Mode
+    description: !input econo_prompt
+    selector:
+      text:
+sequence:
+  - variables:
+      action: "{{ action | default('') | trim | lower }}"
+      entity_id: "{{ entity_id | default('') | trim }}"
+      hvac_mode: "{{ hvac_mode | default(none) }}"
+      swing_mode: "{{ swing_mode | default(none) }}"
+      fan_mode: "{{ fan_mode | default(none) }}"
+      turbo: "{{ turbo | default(none) }}"
+      econo: "{{ econo | default(none) }}"
+  - if:
+      - alias: Validate action
+        condition: template
+        value_template: "{{ action not in ['set_hvac_mode', 'set_swing_mode', 'set_fan_mode', 'set_turbo', 'set_econo'] }}"
+    then:
+      - variables:
+          response:
+            error: "Invalid action. Must be one of: set_hvac_mode, set_swing_mode, set_fan_mode, set_turbo, set_econo."
+      - stop: "Invalid action"
+        response_variable: response
+  - if:
+      - alias: Validate entity_id
+        condition: template
+        value_template: "{{ not entity_id.startswith('climate.') }}"
+    then:
+      - variables:
+          response:
+            error: "Invalid entity_id. Must start with climate."
+      - stop: "Invalid entity_id"
+        response_variable: response
+  - choose:
+      - conditions:
+          - condition: template
+            value_template: "{{ action == 'set_hvac_mode' }}"
+        sequence:
+          - if:
+              - condition: template
+                value_template: "{{ hvac_mode is none }}"
+            then:
+              - variables:
+                  response:
+                    error: "HVAC mode value is required for set_hvac_mode action."
+              - stop: "Missing hvac_mode"
+                response_variable: response
+          - if:
+              - condition: template
+                value_template: "{{ hvac_mode not in ['heat', 'cool', 'heat_cool', 'auto', 'dry', 'fan_only'] }}"
+            then:
+              - variables:
+                  response:
+                    error: "HVAC mode must be one of: heat, cool, heat_cool, auto, dry, fan_only."
+              - stop: "Invalid hvac_mode"
+                response_variable: response
+          - action: climate.set_hvac_mode
+            target:
+              entity_id: "{{ entity_id }}"
+            data:
+              hvac_mode: "{{ hvac_mode }}"
+          - variables:
+              response:
+                status: success
+                message: "HVAC mode set to {{ hvac_mode }}"
+          - stop: ""
+            response_variable: response
+      - conditions:
+          - condition: template
+            value_template: "{{ action == 'set_swing_mode' }}"
+        sequence:
+          - if:
+              - condition: template
+                value_template: "{{ swing_mode is none }}"
+            then:
+              - variables:
+                  response:
+                    error: "Swing mode value is required for set_swing_mode action."
+              - stop: "Missing swing_mode"
+                response_variable: response
+          - if:
+              - condition: template
+                value_template: "{{ swing_mode not in ['off', 'vertical', 'horizontal', 'both'] }}"
+            then:
+              - variables:
+                  response:
+                    error: "Swing mode must be one of: off, vertical, horizontal, both."
+              - stop: "Invalid swing_mode"
+                response_variable: response
+          - action: climate.set_swing_mode
+            target:
+              entity_id: "{{ entity_id }}"
+            data:
+              swing_mode: "{{ swing_mode }}"
+          - variables:
+              response:
+                status: success
+                message: "Swing mode set to {{ swing_mode }}"
+          - stop: ""
+            response_variable: response
+      - conditions:
+          - condition: template
+            value_template: "{{ action == 'set_fan_mode' }}"
+        sequence:
+          - if:
+              - condition: template
+                value_template: "{{ fan_mode is none }}"
+            then:
+              - variables:
+                  response:
+                    error: "Fan mode value is required for set_fan_mode action."
+              - stop: "Missing fan_mode"
+                response_variable: response
+          - if:
+              - condition: template
+                value_template: "{{ fan_mode not in ['low', 'medium', 'high', 'min', 'max', 'auto'] }}"
+            then:
+              - variables:
+                  response:
+                    error: "Fan mode must be one of: low, medium, high, min, max, auto."
+              - stop: "Invalid fan_mode"
+                response_variable: response
+          - action: climate.set_fan_mode
+            target:
+              entity_id: "{{ entity_id }}"
+            data:
+              fan_mode: "{{ fan_mode }}"
+          - variables:
+              response:
+                status: success
+                message: "Fan mode set to {{ fan_mode }}"
+          - stop: ""
+            response_variable: response
+      - conditions:
+          - condition: template
+            value_template: "{{ action == 'set_turbo' }}"
+        sequence:
+          - if:
+              - condition: template
+                value_template: "{{ turbo is none }}"
+            then:
+              - variables:
+                  response:
+                    error: "Turbo mode value is required for set_turbo action."
+              - stop: "Missing turbo"
+                response_variable: response
+          - if:
+              - condition: template
+                value_template: "{{ turbo not in ['on', 'off'] }}"
+            then:
+              - variables:
+                  response:
+                    error: "Turbo mode must be on or off."
+              - stop: "Invalid turbo"
+                response_variable: response
+          - action: tasmota_irhvac.set_turbo
+            target:
+              entity_id: "{{ entity_id }}"
+            data:
+              turbo: "{{ turbo }}"
+          - variables:
+              response:
+                status: success
+                message: "Turbo mode {{ turbo }}"
+          - stop: ""
+            response_variable: response
+      - conditions:
+          - condition: template
+            value_template: "{{ action == 'set_econo' }}"
+        sequence:
+          - if:
+              - condition: template
+                value_template: "{{ econo is none }}"
+            then:
+              - variables:
+                  response:
+                    error: "Econo mode value is required for set_econo action."
+              - stop: "Missing econo"
+                response_variable: response
+          - if:
+              - condition: template
+                value_template: "{{ econo not in ['on', 'off'] }}"
+            then:
+              - variables:
+                  response:
+                    error: "Econo mode must be on or off."
+              - stop: "Invalid econo"
+                response_variable: response
+          - action: tasmota_irhvac.set_econo
+            target:
+              entity_id: "{{ entity_id }}"
+            data:
+              econo: "{{ econo }}"
+          - variables:
+              response:
+                status: success
+                message: "Econo mode {{ econo }}"
+          - stop: ""
+            response_variable: response
+    default:
+      - variables:
+          response:
+            error: "Unknown action"
+      - stop: "Unknown action"
+        response_variable: response

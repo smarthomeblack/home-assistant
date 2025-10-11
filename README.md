@@ -58,6 +58,22 @@ Bộ sưu tập các Blueprint thông minh cho Home Assistant với tích hợp 
 
 ---
 
+### ❄️ [Climate Control](./climatecontrol/)
+**Điều khiển điều hòa thông minh**
+
+**Tính năng:**
+- 🌡️ Điều chỉnh chế độ hoạt động (heat, cool, auto, dry, fan_only)
+- 🔄 Điều khiển xoay gió (vertical, horizontal, both)
+- 🌬️ Điều chỉnh tốc độ quạt (low, medium, high, auto)
+- ⚡ Chế độ Turbo - công suất tối đa
+- 🌿 Chế độ Econo - tiết kiệm điện
+- 🗣️ Điều khiển bằng giọng nói
+- 🔧 Hỗ trợ Tasmota IR HVAC
+
+[📖 Xem chi tiết →](./climatecontrol/)
+
+---
+
 ### 📱 [Send Image to Zalo](./sendimagetozalo/)
 **Gửi ảnh qua Zalo Bot**
 
@@ -96,6 +112,7 @@ Bộ sưu tập các Blueprint thông minh cho Home Assistant với tích hợp 
 - **AI Integration:** OpenAI, Google Generative AI, hoặc tương thích
 - **Voice Assistant:** Home Assistant Assist (tùy chọn)
 - **Zalo Bot:** Yêu cầu cho các blueprint Send Image và Traffic Fine
+- **Tasmota IR HVAC:** Yêu cầu cho chế độ Turbo/Econo của Climate Control
 
 ---
 
@@ -144,3 +161,6 @@ Nếu thấy hữu ích, đừng quên ⭐ Star repository này!
 - **GitHub:** [@smarthomeblack](https://github.com/smarthomeblack)
 - **Issues:** [GitHub Issues](https://github.com/smarthomeblack/home-assistant/issues)
 
+---
+
+**Version:** 2.0 | **Cập nhật:** 2025-01-12
