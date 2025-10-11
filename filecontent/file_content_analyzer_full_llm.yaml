@@ -189,7 +189,7 @@ sequence:
       entity_aliases: !input entity_aliases
       ai_task_entity: !input ai_task_entity
       ai_task_prompt: !input ai_task_prompt
-      combined_instructions: "{{ (ai_task_prompt | default('') | trim) + '\n\n' + (instructions | default('') | trim) }}"
+      combined_instructions: "{{ (ai_task_prompt | default('') | trim) + '\n\n***User***\n\n' + (instructions | default('') | trim) }}"
       media_source: "{{ media_source | default('') | trim }}"
       media_path: "{{ media_path | default('') | trim }}"
       mime_type: "{{ mime_type | default('') | trim }}"
