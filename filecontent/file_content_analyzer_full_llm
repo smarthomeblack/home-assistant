@@ -1,0 +1,328 @@
+blueprint:
+  name: Voice - File Content Analyzer
+  author: luuquangvu
+  description: >-
+    # Tool designed to analyze and extract all types of information from media and document files
+
+    ## Blueprint Setup
+
+    ### Required
+
+    * An AI Task entity must be created and configured in the System - General settings.
+
+    * A template sensor stores all information about entity aliases needs to be configured in `config/configuration.yaml`.
+
+    ```
+
+    #File configuration.yaml
+
+    shell_command:
+      get_entity_alias: jq '[.data.entities[] | select(.options.conversation.should_expose == true and (.aliases | length > 0)) | {entity_id, aliases}]' ./.storage/core.entity_registry
+    template:
+      - trigger:
+          - platform: homeassistant
+            event: start
+          - trigger: event
+            event_type: event_template_reloaded
+        action:
+          - action: shell_command.get_entity_alias
+            response_variable: response
+        sensor:
+          - name: "Assist: Entity IDs and Aliases"
+            unique_id: entity_ids_and_aliases
+            icon: mdi:format-list-bulleted
+            device_class: timestamp
+            state: "{{ now().isoformat() }}"
+            attributes:
+              entities: "{{ response.stdout }}"
+
+    ```
+
+    ### Optional
+
+    * Adjust the prompts for each field used in the script. The descriptions guide the LLM to provide the correct input.
+
+    ### Note
+
+    * Provide a concise and precise description for the script. This description will enable the LLM to recognize that the script is designed to extract data from a media or document file.
+
+    * Expose any camera entities you want to use through Assist, and Assist will be able to "see" whenever you ask.
+
+    * Make sure to expose the script to Assist after the script has been saved.
+
+    * Do not alter the default script name.
+  domain: script
+  homeassistant:
+    min_version: 2025.8.0
+  input:
+    entity_aliases_settings:
+      name: Settings for Entity Aliases
+      icon: mdi:format-list-bulleted
+      description: You can use these settings to configure a template sensor that stores all information about entity aliases.
+      input:
+        entity_aliases:
+          name: Entity Aliases
+          selector:
+            entity:
+              filter:
+                - domain: sensor
+                  integration: template
+    ai_task_settings:
+      name: Settings for AI Task
+      icon: mdi:robot-outline
+      description: These settings allow you to set up the AI Task responsible for handling the analyzer task.
+      collapsed: true
+      input:
+        ai_task_entity:
+          name: AI Task Entity
+          description: If left empty, the system will use the default settings under System - General.
+          selector:
+            entity:
+              filter:
+                domain: ai_task
+          default:
+    prompt_settings:
+      name: Prompt settings for the LLM
+      icon: mdi:robot
+      description: You can use these settings to finetune the prompts for your specific LLM (model). In most cases the defaults should be fine.
+      collapsed: true
+      input:
+        instructions_prompt:
+          name: Instructions Prompt
+          description: The prompt which will be used for the LLM can provide the request for the query.
+          selector:
+            text:
+              multiline: true
+          default: >-
+            This argument is mandatory and must always be provided.
+
+            The tool can analyze content and extract any type of information from an image, video, audio, or document, including text, numbers, objects, speech, and visual features.
+
+            Always clearly specify exactly what data should be extracted.
+        media_source_prompt:
+          name: Media Source Prompt
+          description: The prompt which will be used for the LLM can provide the media source for the query.
+          selector:
+            text:
+              multiline: true
+          default: >-
+            This argument is mandatory and must always be provided.
+
+            Always specify the media source.
+
+            It must be one of the following values: 'camera' for a camera entity, or 'path' for other types.
+        media_path_prompt:
+          name: Media Path Prompt
+          description: The prompt which will be used for the LLM can provide the media path for the query.
+          selector:
+            text:
+              multiline: true
+          default: >-
+            This argument is mandatory and must always be provided.
+
+            Always specify either the relative path of the media or the camera entity name.
+        mime_type_prompt:
+          name: MIME Type Prompt
+          description: The prompt which will be used for the LLM can provide the MIME type of media for the query.
+          selector:
+            text:
+              multiline: true
+          default: >-
+            This argument is mandatory and must always be provided.
+
+            Always specify the MIME type of the media.
+
+            If the media source is 'camera', the MIME type must be set to 'application/vnd.apple.mpegurl'.
+        ai_task_prompt:
+          name: AI Task Prompt
+          description: The system prompt that will be prepended to the user instructions for the AI Task.
+          selector:
+            text:
+              multiline: true
+          default: >-
+            ***System***
+
+            You are an expert in analyzing files, images, videos, audio, and documents.
+
+            If the user does not have specific requirements or does not require detailed analysis, then analyze briefly.
+
+            Always respond in the same language as the question.
+
+            Respond in plain text only; no Markdown, formatting or emojis. Diacritics and characters from the user's language are allowed.
+
+            Keep replies on a single line by replacing line breaks with spaces, but always preserve normal punctuation such as periods or semicolons to ensure natural sentence breaks.
+mode: parallel
+max_exceeded: silent
+variables:
+  version: 20250923
+fields:
+  instructions:
+    name: Instructions
+    description: !input instructions_prompt
+    selector:
+      text:
+        multiline: true
+    required: true
+  media_source:
+    name: Media Source
+    description: !input media_source_prompt
+    selector:
+      select:
+        options:
+          - camera
+          - path
+    required: true
+  media_path:
+    name: Media Path
+    description: !input media_path_prompt
+    selector:
+      text:
+    required: true
+  mime_type:
+    name: MIME Type
+    description: !input mime_type_prompt
+    selector:
+      text:
+    required: true
+sequence:
+  - variables:
+      entity_aliases: !input entity_aliases
+      ai_task_entity: !input ai_task_entity
+      ai_task_prompt: !input ai_task_prompt
+      combined_instructions: "{{ (ai_task_prompt | default('') | trim) + '\n\n' + (instructions | default('') | trim) }}"
+      media_source: "{{ media_source | default('') | trim }}"
+      media_path: "{{ media_path | default('') | trim }}"
+      mime_type: "{{ mime_type | default('') | trim }}"
+  - if:
+      - alias: Check if variables were set correctly
+        condition: template
+        value_template: "{{ not (instructions | default('') | trim) }}"
+    then:
+      - alias: Set variable for error message
+        variables:
+          response:
+            error: >-
+              Unable to extract data because instructions is missing or incorrect.
+      - alias: Stop the script
+        stop: >-
+          Unable to extract data because instructions is missing or incorrect.
+        response_variable: response
+  - if:
+      - alias: Check if variables were set correctly
+        condition: template
+        value_template: "{{ not media_source in ['camera', 'path'] }}"
+    then:
+      - alias: Set variable for error message
+        variables:
+          response:
+            error: >-
+              Unable to extract data because media source is missing or incorrect.
+      - alias: Stop the script
+        stop: >-
+          Unable to extract data because media source is missing or incorrect.
+        response_variable: response
+  - if:
+      - alias: Check if variables were set correctly
+        condition: template
+        value_template: "{{ not mime_type.startswith(('image/', 'video/', 'audio/', 'text/', 'application/')) }}"
+    then:
+      - alias: Set variable for error message
+        variables:
+          response:
+            error: >-
+              Unable to extract data because MIME type is missing or incorrect.
+      - alias: Stop the script
+        stop: >-
+          Unable to extract data because MIME type is missing or incorrect.
+        response_variable: response
+  - if:
+      - condition: template
+        value_template: "{{ media_source == 'camera' }}"
+    then:
+      - if:
+          - alias: Check if variables were set correctly
+            condition: template
+            value_template: >-
+              {% if not ((states.camera | selectattr('attributes.friendly_name', '==', media_path.strip()) | list) or
+              (state_attr(entity_aliases, 'entities') | default([]) | selectattr('entity_id', 'match', 'camera\.') | selectattr('aliases', 'contains', media_path.strip()) | list)) -%}
+              {{ true }}
+              {% else -%}
+              {{ false }}
+              {% endif -%}
+        then:
+          - alias: Set variable for error message
+            variables:
+              response:
+                error: >-
+                  Unable to extract data because media path is incorrect.
+          - alias: Stop the script
+            stop: >-
+              Unable to extract data because media path is incorrect.
+            response_variable: response
+      - if:
+          - alias: Check if variables were set correctly
+            condition: template
+            value_template: "{{ mime_type != 'application/vnd.apple.mpegurl' }}"
+        then:
+          - alias: Set variable for error message
+            variables:
+              response:
+                error: >-
+                  Unable to extract data because MIME type is incorrect.
+          - alias: Stop the script
+            stop: >-
+              Unable to extract data because MIME type is incorrect.
+            response_variable: response
+      - variables:
+          camera_id: >-
+            {% if (states.camera | selectattr('attributes.friendly_name', '==', media_path.strip()) | list) -%}
+            {{ states.camera | selectattr('attributes.friendly_name', '==', media_path.strip()) | map(attribute='entity_id') | first }}
+            {% else -%}
+            {{ state_attr(entity_aliases, 'entities') | default([]) | selectattr('entity_id', 'match', 'camera\.') | selectattr('aliases', 'contains', media_path.strip()) | map(attribute='entity_id') | first }}
+            {% endif -%}
+      - variables:
+          attachments:
+            media_content_id: media-source://camera/{{ camera_id }}
+            media_content_type: "{{ mime_type }}"
+    else:
+      - if:
+          - alias: Check if variables were set correctly
+            condition: template
+            value_template: "{{ media_path.startswith(('media-source', '/')) or not '/' in media_path }}"
+        then:
+          - alias: Set variable for error message
+            variables:
+              response:
+                error: >-
+                  Unable to extract data because media path is incorrect.
+          - alias: Stop the script
+            stop: >-
+              Unable to extract data because media path is incorrect.
+            response_variable: response
+      - variables:
+          attachments:
+            media_content_id: media-source://media_source/{{ media_path }}
+            media_content_type: "{{ mime_type }}"
+  - if:
+      - condition: template
+        value_template: "{{ not ai_task_entity }}"
+    then:
+      - action: ai_task.generate_data
+        data:
+          task_name: Analyze content from a media entity
+          instructions: "{{ combined_instructions }}"
+          attachments: "{{ attachments }}"
+        response_variable: result
+    else:
+      - action: ai_task.generate_data
+        data:
+          task_name: Analyze content from a media entity
+          instructions: "{{ combined_instructions }}"
+          attachments: "{{ attachments }}"
+          entity_id: "{{ ai_task_entity }}"
+        response_variable: result
+  - variables:
+      response:
+        data: "{{ result.data }}"
+  - stop: ""
+    response_variable: response
