@@ -1,0 +1,326 @@
+﻿blueprint:
+  name: Fan Control - Speed and Oscillation
+  author: smarthomeblack
+  description: |
+    # Tool for controlling fan speed and oscillation with LLM integration
+    
+    ## Blueprint Setup
+    
+    ### Required
+    * The Home Assistant fan integration must be installed and configured.
+    
+    ### Optional
+    * Adjust the prompts for each field used in the script. The descriptions guide the LLM to provide the correct input.
+    * Configure the percentage_step value for increase/decrease speed operations.
+    
+    ### Note
+    * Provide a concise and precise description for the script. This will be utilized by the LLM to understand it should use this script for controlling fans.
+    * Make sure to expose the script to Assist after the script has been saved.
+    * Do not alter the default script name.
+  domain: script
+  homeassistant:
+    min_version: 2024.10.0
+  input:
+    fan_settings:
+      name: Settings for Fan Control
+      icon: mdi:fan
+      description: Configure the default settings for fan control operations.
+      input:
+        percentage_step:
+          name: Percentage Step
+          description: The percentage step value used when increasing or decreasing fan speed (1-100).
+          selector:
+            number:
+              min: 5
+              max: 35
+              step: 1
+          default: 25
+    prompt_settings:
+      name: Prompt settings for the LLM
+      icon: mdi:robot
+      description: You can use these settings to finetune the prompts for your specific LLM (model). In most cases the defaults should be fine.
+      collapsed: true
+      input:
+        action_prompt:
+          name: Action Prompt
+          description: The prompt for the LLM to select the fan control action.
+          selector:
+            text:
+              multiline: true
+          default: >-
+            This argument is mandatory and must always be provided.
+            
+            Select ONE of the following fan control actions based on user request:
+            
+            1. **set_percentage** - Set fan speed to a specific percentage (0-100)
+               Use when: User asks to set fan to a specific speed
+               Example requests:
+               - "Set living room fan to 70%"
+               - "Dat quat phong khach o toc do 50"
+               - "Turn fan to maximum speed" (use 100)
+            
+            2. **increase_speed** - Increase fan speed by a step
+               Use when: User asks to increase, speed up, or make fan faster
+               Example requests:
+               - "Increase bedroom fan speed"
+               - "Tang toc do quat phong ngu"
+               - "Make the fan faster"
+            
+            3. **decrease_speed** - Decrease fan speed by a step
+               Use when: User asks to decrease, slow down, or make fan slower
+               Example requests:
+               - "Decrease kitchen fan speed"
+               - "Giam toc do quat bep"
+               - "Make the fan slower"
+            
+            4. **oscillate** - Control fan oscillation (rotation)
+               Use when: User asks to turn on/off fan rotation or oscillation
+               Example requests:
+               - "Turn on fan oscillation"
+               - "Bat xoay quat phong khach"
+               - "Stop fan from rotating"
+               - "Tat xoay quat"
+            
+            **IMPORTANT:**
+            - Always use lowercase for action value
+            - Action must be exactly one of: set_percentage, increase_speed, decrease_speed, oscillate
+            - Do not include any prefixes like "fan." in the action value
+        entity_id_prompt:
+          name: Entity ID Prompt
+          description: The prompt for the LLM to provide the fan entity_id.
+          selector:
+            text:
+              multiline: true
+          default: >-
+            This argument is mandatory and must always be provided.
+            
+            Enter the exact entity_id of the fan you want to control.
+            
+            **Available fans and their entity_ids:**
+            - Quạt phòng khách: fan.quat_phong_khach
+            - Quạt phòng  ngủ: fan.quat_phong_ngu
+            - Quạt phòng  bếp: fan.quat_bep
+            - Quạt phòng  xếp: fan.fanwork_t_c
+            - Quạt phòng má : fan.quatbldc_t_c
+
+            **Examples:**
+            - User says "living room fan" -> enter: fan.quat_phong_khach
+            - User says "quat phong ngu" -> enter: fan.quat_phong_ngu
+            - User says "office fan" -> enter: fan.fanwork_t_c
+            - User says "quat BLDC" -> enter: fan.quatbldc_t_c 
+  
+        percentage_prompt:
+          name: Percentage Prompt
+          description: The prompt for the LLM to provide the fan speed percentage.
+          selector:
+            text:
+              multiline: true
+          default: >-
+            This argument is required ONLY for ''set_percentage'' action.
+            Leave empty for other actions.
+            
+            Enter the fan speed percentage value from 0 to 100.
+            
+            **Speed levels:**
+            - 0: Turn off fan
+            - 1-33: Low speed (Toc do thap)
+            - 34-66: Medium speed (Toc do trung binh)
+            - 67-100: High speed (Toc do cao)
+            
+            **Examples:**
+            - User says "set fan to 70%" -> enter: 70
+            - User says "turn fan to maximum" -> enter: 100
+            - User says "low speed" -> enter: 30
+            - User says "medium speed" -> enter: 50
+            - User says "high speed" -> enter: 80
+            
+            **IMPORTANT:**
+            - Must be a number between 0 and 100
+            - Do not include the "%" symbol
+            - Only provide this value when action is ''set_percentage''
+
+        oscillating_prompt:
+          name: Oscillating Prompt
+          description: The prompt for the LLM to provide the oscillation state.
+          selector:
+            text:
+              multiline: true
+          default: >-
+            This argument is required ONLY for ''oscillate'' action.
+            Leave empty for other actions.
+            
+            Enter the oscillation state as a boolean value.
+            
+            **Values:**
+            - true: Turn ON oscillation (fan will rotate/swing)
+            - false: Turn OFF oscillation (fan will stay in fixed position)
+            
+            **Examples:**
+            - User says "turn on fan oscillation" -> enter: true
+            - User says "bat xoay quat" -> enter: true
+            - User says "enable fan rotation" -> enter: true
+            - User says "turn off fan oscillation" -> enter: false
+            - User says "tat xoay quat" -> enter: false
+            - User says "stop fan from rotating" -> enter: false
+            - User says "fix fan position" -> enter: false
+            
+            **IMPORTANT:**
+            - Must be exactly "true" or "false" (lowercase)
+            - Do not use "True", "False", "TRUE", "FALSE"
+            - Do not use 1/0 or yes/no
+            - Only provide this value when action is ''oscillate''
+
+mode: queued
+max: 10
+max_exceeded: silent
+variables:
+  version: 20250112
+fields:
+  action:
+    name: Action
+    description: !input action_prompt
+    selector:
+      text:
+    required: true
+  entity_id:
+    name: Entity ID
+    description: !input entity_id_prompt
+    selector:
+      text:
+    required: true
+  percentage:
+    name: Percentage
+    description: !input percentage_prompt
+    selector:
+      number:
+        min: 0
+        max: 100
+        step: 1
+  oscillating:
+    name: Oscillating
+    description: !input oscillating_prompt
+    selector:
+      boolean:
+sequence:
+  - variables:
+      action: "{{ action | default('''') | trim | lower }}"
+      entity_id: "{{ entity_id | default('''') | trim }}"
+      percentage: "{{ percentage | default(none) }}"
+      oscillating: "{{ oscillating | default(none) }}"
+      percentage_step: !input percentage_step
+  - if:
+      - alias: Validate action
+        condition: template
+        value_template: "{{ action not in [''set_percentage'', ''increase_speed'', ''decrease_speed'', ''oscillate''] }}"
+    then:
+      - variables:
+          response:
+            error: >-
+              Invalid action. Must be one of: set_percentage, increase_speed, decrease_speed, oscillate.
+      - stop: "Invalid action"
+        response_variable: response
+  - if:
+      - alias: Validate entity_id
+        condition: template
+        value_template: "{{ not entity_id.startswith(''fan.'') }}"
+    then:
+      - variables:
+          response:
+            error: >-
+              Invalid entity_id. Must start with ''fan.''.
+      - stop: "Invalid entity_id"
+        response_variable: response
+  - choose:
+      - conditions:
+          - condition: template
+            value_template: "{{ action == ''set_percentage'' }}"
+        sequence:
+          - if:
+              - condition: template
+                value_template: "{{ percentage is none }}"
+            then:
+              - variables:
+                  response:
+                    error: "Percentage value is required for set_percentage action."
+              - stop: "Missing percentage"
+                response_variable: response
+          - if:
+              - condition: template
+                value_template: "{{ percentage < 0 or percentage > 100 }}"
+            then:
+              - variables:
+                  response:
+                    error: "Percentage must be between 0 and 100."
+              - stop: "Invalid percentage"
+                response_variable: response
+          - action: fan.set_percentage
+            target:
+              entity_id: "{{ entity_id }}"
+            data:
+              percentage: "{{ percentage }}"
+          - variables:
+              response:
+                status: "success"
+                message: "Fan speed set to {{ percentage }}%"
+          - stop: ""
+            response_variable: response
+      - conditions:
+          - condition: template
+            value_template: "{{ action == ''increase_speed'' }}"
+        sequence:
+          - action: fan.increase_speed
+            target:
+              entity_id: "{{ entity_id }}"
+            data:
+              percentage_step: "{{ percentage_step }}"
+          - variables:
+              response:
+                status: "success"
+                message: "Fan speed increased by {{ percentage_step }}%"
+          - stop: ""
+            response_variable: response
+      - conditions:
+          - condition: template
+            value_template: "{{ action == ''decrease_speed'' }}"
+        sequence:
+          - action: fan.decrease_speed
+            target:
+              entity_id: "{{ entity_id }}"
+            data:
+              percentage_step: "{{ percentage_step }}"
+          - variables:
+              response:
+                status: "success"
+                message: "Fan speed decreased by {{ percentage_step }}%"
+          - stop: ""
+            response_variable: response
+      - conditions:
+          - condition: template
+            value_template: "{{ action == ''oscillate'' }}"
+        sequence:
+          - if:
+              - condition: template
+                value_template: "{{ oscillating is none }}"
+            then:
+              - variables:
+                  response:
+                    error: "Oscillating value is required for oscillate action."
+              - stop: "Missing oscillating"
+                response_variable: response
+          - action: fan.oscillate
+            target:
+              entity_id: "{{ entity_id }}"
+            data:
+              oscillating: "{{ oscillating }}"
+          - variables:
+              response:
+                status: "success"
+                message: "Fan oscillation {{ ''enabled'' if oscillating else ''disabled'' }}"
+          - stop: ""
+            response_variable: response
+    default:
+      - variables:
+          response:
+            error: "Unknown action"
+      - stop: "Unknown action"
+        response_variable: response
