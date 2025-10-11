@@ -205,15 +205,15 @@ fields:
       boolean:
 sequence:
   - variables:
-      action: "{{ action | default('''') | trim | lower }}"
-      entity_id: "{{ entity_id | default('''') | trim }}"
+      action: "{{ action | default('') | trim | lower }}"
+      entity_id: "{{ entity_id | default('') | trim }}"
       percentage: "{{ percentage | default(none) }}"
       oscillating: "{{ oscillating | default(none) }}"
       percentage_step: !input percentage_step
   - if:
       - alias: Validate action
         condition: template
-        value_template: "{{ action not in [''set_percentage'', ''increase_speed'', ''decrease_speed'', ''oscillate''] }}"
+        value_template: "{{ action not in ['set_percentage', 'increase_speed', 'decrease_speed', 'oscillate'] }}"
     then:
       - variables:
           response:
@@ -224,18 +224,18 @@ sequence:
   - if:
       - alias: Validate entity_id
         condition: template
-        value_template: "{{ not entity_id.startswith(''fan.'') }}"
+        value_template: "{{ not entity_id.startswith('fan.') }}"
     then:
       - variables:
           response:
             error: >-
-              Invalid entity_id. Must start with ''fan.''.
+              Invalid entity_id. Must start with 'fan.'.
       - stop: "Invalid entity_id"
         response_variable: response
   - choose:
       - conditions:
           - condition: template
-            value_template: "{{ action == ''set_percentage'' }}"
+            value_template: "{{ action == 'set_percentage' }}"
         sequence:
           - if:
               - condition: template
@@ -268,7 +268,7 @@ sequence:
             response_variable: response
       - conditions:
           - condition: template
-            value_template: "{{ action == ''increase_speed'' }}"
+            value_template: "{{ action == 'increase_speed' }}"
         sequence:
           - action: fan.increase_speed
             target:
@@ -283,7 +283,7 @@ sequence:
             response_variable: response
       - conditions:
           - condition: template
-            value_template: "{{ action == ''decrease_speed'' }}"
+            value_template: "{{ action == 'decrease_speed' }}"
         sequence:
           - action: fan.decrease_speed
             target:
@@ -298,7 +298,7 @@ sequence:
             response_variable: response
       - conditions:
           - condition: template
-            value_template: "{{ action == ''oscillate'' }}"
+            value_template: "{{ action == 'oscillate' }}"
         sequence:
           - if:
               - condition: template
@@ -317,7 +317,7 @@ sequence:
           - variables:
               response:
                 status: "success"
-                message: "Fan oscillation {{ ''enabled'' if oscillating else ''disabled'' }}"
+                message: "Fan oscillation {{ 'enabled' if oscillating else 'disabled' }}"
           - stop: ""
             response_variable: response
     default:
