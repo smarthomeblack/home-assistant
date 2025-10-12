@@ -69,11 +69,27 @@ Bộ sưu tập các Blueprint thông minh cho Home Assistant với tích hợp 
 - 🌿 Chế độ Econo - tiết kiệm điện
 - 🗣️ Điều khiển bằng giọng nói
 - 🔧 Hỗ trợ Tasmota IR HVAC
+- **Weather Integration:** Yeu cau cho Weather Forecast (AccuWeather, OpenWeatherMap, Met.no...)
 
 [📖 Xem chi tiết →](./climatecontrol/)
 
 ---
 
+### ☁️ [Weather Forecast](./weatherforecast/)
+**Dự báo thời tiết thông minh**
+
+**Tính năng:**
+- 🌡️ Dự báo theo ngày (daily) và theo giờ (hourly)
+- 📅 Tìm kiếm dự báo theo datetime cụ thể
+- 🌧️ Thông tin đầy đủ: nhiệt độ, mưa, gió, UV...
+- 🗣️ Hỏi thời tiết bằng giọng nói
+- ⚠️ Thông báo khi không tìm thấy dữ liệu
+- 📊 List ngày/giờ có sẵn khi lỗi
+- 🌍 Hỗ trợ nhiều weather integration
+
+[📖 Xem chi tiết →](./weatherforecast/)
+
+---
 ### 📱 [Send Image to Zalo](./sendimagetozalo/)
 **Gửi ảnh qua Zalo Bot**
 

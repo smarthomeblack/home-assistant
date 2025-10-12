@@ -1,0 +1,213 @@
+blueprint:
+  name: Weather Forecast - Get Daily or Hourly
+  author: smarthomeblack
+  description: |
+    # Tool for getting weather forecast with LLM integration
+    
+    ## Blueprint Setup
+    
+    ### Required
+    * The Home Assistant weather integration must be installed and configured.
+    
+    ### Optional
+    * Adjust the prompts for each field used in the script.
+    
+    ### Note
+    * Provide a concise and precise description for the script.
+    * Make sure to expose the script to Assist after the script has been saved.
+    * Do not alter the default script name.
+    * Edit your weather entity in Weather Entity setting
+
+  domain: script
+  homeassistant:
+    min_version: 2024.10.0
+  input:
+    weather_settings:
+      name: Settings for Weather Forecast
+      icon: mdi:weather-partly-cloudy
+      description: Configure the weather entity for forecast.
+      input:
+        weather_entity:
+          name: Weather Entity
+          description: The weather entity to get forecast from.
+          selector:
+            entity:
+              filter:
+                domain: weather
+          default: weather.accuweather_hai_duong
+    prompt_settings:
+      name: Prompt settings for the LLM
+      icon: mdi:robot
+      description: You can use these settings to finetune the prompts for your specific LLM (model). In most cases the defaults should be fine.
+      collapsed: true
+      input:
+        type_prompt:
+          name: Forecast Type Prompt
+          description: The prompt for the LLM to select the forecast type.
+          selector:
+            text:
+              multiline: true
+          default: >-
+            This argument is mandatory and must always be provided.
+            
+            Select the type of weather forecast based on user request:
+            
+            **Available types:**
+            - daily: Daily forecast (Du bao hang ngay)
+            - hourly: Hourly forecast (Du bao hang gio)
+            
+            **When to use daily:**
+            - User asks for forecast by date
+            - User wants to know weather for specific day
+            - Examples: "What is the weather tomorrow?", "Thoi tiet ngay 15 thang 1"
+            
+            **When to use hourly:**
+            - User asks for forecast by hour
+            - User wants to know weather at specific time
+            - Examples: "Weather at 2pm today?", "Thoi tiet luc 10 gio sang"
+            
+            **IMPORTANT:**
+            - Must be exactly daily or hourly (lowercase)
+            - Choose based on whether user asks about day or hour
+        datetime_prompt:
+          name: Datetime Prompt
+          description: The prompt for the LLM to provide the datetime for forecast.
+          selector:
+            text:
+              multiline: true
+          default: >-
+            This argument is mandatory and must always be provided.
+            
+            Enter the date or time for weather forecast.
+            
+            **Format rules:**
+            
+            1. **For DAILY forecast:**
+               - Format: YYYY-MM-DD
+               - Examples:
+                 * User says "weather tomorrow" -> calculate and enter: 2025-01-13
+                 * User says "thoi tiet ngay 15" -> enter: 2025-01-15
+                 * User says "weather on January 20" -> enter: 2025-01-20
+            
+            2. **For HOURLY forecast:**
+               - Format: HH:00 (always use 00 for minutes)
+               - Examples:
+                 * User says "weather at 2pm" -> enter: 14:00
+                 * User says "thoi tiet luc 10 gio sang" -> enter: 10:00
+                 * User says "weather at 9 AM" -> enter: 09:00
+                 * User says "weather at noon" -> enter: 12:00
+            
+            **IMPORTANT:**
+            - For daily: Must be YYYY-MM-DD format
+            - For hourly: Must be HH:00 format (minutes always 00)
+            - Use 24-hour format for hourly (00:00 to 23:00)
+            - Always pad single digit hours with 0 (09:00 not 9:00)
+mode: queued
+max: 10
+max_exceeded: silent
+variables:
+  version: 20250112
+fields:
+  type:
+    name: Forecast Type
+    description: !input type_prompt
+    selector:
+      text:
+    required: true
+  datetime:
+    name: Date or Time
+    description: !input datetime_prompt
+    selector:
+      text:
+    required: true
+sequence:
+  - variables:
+      weather_entity: !input weather_entity
+      type: "{{ type | default('') | trim | lower }}"
+      datetime_input: "{{ datetime | default('') | trim }}"
+  - if:
+      - alias: Validate type
+        condition: template
+        value_template: "{{ type not in ['daily', 'hourly'] }}"
+    then:
+      - variables:
+          response:
+            error: "Forecast type must be daily or hourly."
+      - stop: "Invalid type"
+        response_variable: response
+  - if:
+      - alias: Validate datetime
+        condition: template
+        value_template: "{{ not datetime_input }}"
+    then:
+      - variables:
+          response:
+            error: "Datetime is required."
+      - stop: "Missing datetime"
+        response_variable: response
+  - action: weather.get_forecasts
+    target:
+      entity_id: "{{ weather_entity }}"
+    data:
+      type: "{{ type }}"
+    response_variable: forecast_result
+  - variables:
+      forecast_list: "{{ forecast_result[weather_entity].forecast }}"
+  - if:
+      - condition: template
+        value_template: "{{ type == 'daily' }}"
+    then:
+      - variables:
+          target_date: "{{ datetime_input }}"
+          matched_forecast: >-
+            {% set ns = namespace(found=none) %}
+            {% for item in forecast_list %}
+              {% if item.datetime[:10] == target_date %}
+                {% set ns.found = item %}
+              {% endif %}
+            {% endfor %}
+            {{ ns.found }}
+      - if:
+          - condition: template
+            value_template: "{{ matched_forecast == none }}"
+        then:
+          - variables:
+              response:
+                error: "No forecast data found for date {{ target_date }}. Available dates: {{ forecast_list | map(attribute='datetime') | map('regex_replace', 'T.*', '') | list | join(', ') }}"
+          - stop: "No matching forecast"
+            response_variable: response
+      - variables:
+          response:
+            status: "success"
+            type: "daily"
+            forecast: "{{ matched_forecast }}"
+      - stop: ""
+        response_variable: response
+    else:
+      - variables:
+          target_time: "{{ datetime_input }}"
+          matched_forecast: >-
+            {% set ns = namespace(found=none) %}
+            {% for item in forecast_list %}
+              {% set item_time = item.datetime[11:16] %}
+              {% if item_time == target_time %}
+                {% set ns.found = item %}
+              {% endif %}
+            {% endfor %}
+            {{ ns.found }}
+      - if:
+          - condition: template
+            value_template: "{{ matched_forecast == none }}"
+        then:
+          - variables:
+              response:
+                error: "No forecast data found for time {{ target_time }}. Available times: {{ forecast_list | map(attribute='datetime') | map('regex_replace', '.*T(\\d{2}:\\d{2}).*', '\\\\1') | list | join(', ') }}"
+          - stop: "No matching forecast"
+            response_variable: response
+      - variables:
+          response:
+            status: "success"
+            type: "hourly"
+            forecast: "{{ matched_forecast }}"
+      - stop: ""
+        response_variable: response
