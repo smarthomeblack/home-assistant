@@ -39,8 +39,7 @@ Sau khi import blueprint, tạo automation từ blueprint với các thông số
   - Lấy từ cấu hình Zalo Bot
 
 - **Conversation Agent** - AI model để tạo tin nhắn
-  - Ví dụ: `conversation.gpt_4o_mini`
-  - Ví dụ: `conversation.google_generative_ai`
+
 
 #### **Thông số tùy chọn:**
 
