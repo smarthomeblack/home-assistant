@@ -174,18 +174,14 @@ action:
         {%- endif %}
         {{calendar_response}}
         {{todo_response}}
+        {{custom_footer}}
         {{ prompt }}
       agent_id: !input conversation_agent
     response_variable: agent
   - alias: "Send Message to Zalo"
     service: zalo_bot.send_message
     data:
-      message: >-
-        {{ agent.response.speech.plain.speech }}
-        {%- if custom_footer %}
-        
-        {{ custom_footer }}
-        {%- endif %}
+      message: {{ agent.response.speech.plain.speech }}
       thread_id: !input zalo_thread_id
       account_selection: !input zalo_account_selection
       type: !input zalo_type
