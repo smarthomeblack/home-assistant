@@ -106,6 +106,24 @@ Bộ sưu tập các Blueprint thông minh cho Home Assistant với tích hợp 
 
 ---
 
+
+### 🌅 [Send Morning Summary to Zalo](./sendmorningsummarytozalo/)
+**Gửi tổng hợp buổi sáng qua Zalo**
+
+**Tính năng:**
+- ☀️ Dự báo thời tiết theo giờ
+- 📅 Lịch làm việc và sự kiện
+- ✅ Danh sách công việc cần làm
+- 🤖 AI tạo tin nhắn cá nhân hóa
+- 📝 Tùy chỉnh custom footer
+- ⏰ Gửi tự động theo lịch
+- 🔔 Hỗ trợ tin nhắn cá nhân và nhóm
+- ⏱️ TTL - Tự động xóa tin nhắn
+
+[📖 Xem chi tiết →](./sendmorningsummarytozalo/)
+
+---
+
 ### 🚗 [Traffic Fine Lookup](./tracuuphatnguoi/)
 **Tra cứu phạt nguội giao thông**
 
