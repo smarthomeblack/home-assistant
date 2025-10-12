@@ -181,7 +181,7 @@ action:
   - alias: "Send Message to Zalo"
     service: zalo_bot.send_message
     data:
-      message: {{ agent.response.speech.plain.speech }}
+      message: "{{ agent.response.speech.plain.speech }}"
       thread_id: !input zalo_thread_id
       account_selection: !input zalo_account_selection
       type: !input zalo_type
