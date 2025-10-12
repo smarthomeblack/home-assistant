@@ -1,0 +1,203 @@
+﻿blueprint:
+  name: Send summary information to zalo
+  author: smarthomeblack
+  description: |-
+    Send summary information to zalo ✨
+    
+    I'm here to support you with your daily routines and make sure you're perfectly prepared to start your day! 💪🌞
+
+    🌦️ **Weather:** I'll keep you updated on the current weather so you can dress appropriately.
+
+    📅 **Calendar:** I'll inform you about your upcoming appointments and important events so you don't miss anything.
+
+    ✅ **To-do List:** I'll remind you of your pending tasks and help you stay organized throughout the day.
+
+    🎉 **Special Occasions:** From birthdays to anniversaries – I'll remind you of moments worth celebrating!
+
+    This is an automated design so please do not show it to assistants.. 🚀💼
+ 
+  domain: automation
+  input:
+    notify_time:
+      name: Notification Time
+      description: The time at which the notification will be triggered.
+      selector:
+        time: {}
+      default: 06:15:00
+    zalo_thread_id:
+      name: Zalo Thread ID
+      description: The Zalo thread/conversation ID to send the message to.
+      selector:
+        text: {}
+      default: ""
+    zalo_account_selection:
+      name: Zalo Account Selection
+      description: The Zalo account selection identifier.
+      selector:
+        text: {}
+      default: ""
+    zalo_type:
+      name: Zalo Message Type
+      description: Message type - 1 for group, 0 for personal.
+      selector:
+        select:
+          options:
+            - label: Personal (0)
+              value: "0"
+            - label: Group (1)
+              value: "1"
+      default: "1"
+    zalo_ttl:
+      name: Zalo Message TTL
+      description: Time to live (auto-delete time) in milliseconds. Set 0 to disable.
+      selector:
+        number:
+          min: 0
+          max: 86400000
+          step: 1000
+          unit_of_measurement: ms
+      default: 0
+    calendar_entity:
+      name: Calendar
+      description: 📅 The calendar entities to use for upcoming events.
+      selector:
+        entity:
+          multiple: true
+          filter:
+            - domain:
+                - calendar
+    calendar_duration:
+      name: Calendar Event Timing
+      description: ⏰ How many hours in advance to look for upcoming events.
+      selector:
+        duration:
+      default:
+        hours: 18
+    todo_entity:
+      name: To-do List
+      description: ✅ The to-do list entities to use for pending tasks.
+      selector:
+        entity:
+          multiple: true
+          filter:
+            - domain:
+                - todo
+      default: []
+    weather_entity:
+      name: Weather Entity
+      description: 🌦️ The weather entity to use for the weather forecast.
+      selector:
+        entity:
+          multiple: false
+          filter:
+            - domain:
+                - weather
+    custom_footer:
+      name: Custom Footer Text (Optional)
+      description: ✍️ Optional custom text to append at the end of the message.
+      selector:
+        text:
+          multiline: true
+      default: ""
+    conversation_agent:
+      name: Conversation Agent
+      description: 🤖 The AI model to use for configuring your personalized message.
+      selector:
+        conversation_agent:
+    prompt:
+      name: Conversation Agent Prompt
+      description: ✍️ The description to provide to the AI for generating your personalized text.
+      selector:
+        text:
+          multiline: true
+          type: text
+      default: |-
+        Please generate a friendly morning summary message in Vietnamese for the user.
+
+        - Your responses should always be helpful, warm, and informative.
+        - Avoid technical details or specific system information.
+        - Compose messages to motivate the user.
+        - Include notes on exceptional weather suitable for the season, with recommendations on what to wear today (e.g., long pants, shorts, (light) jacket, sweater).
+        - Mention upcoming meetings or appointments only if they exist. List events chronologically, showing the date and time.
+        - Do not inform about the absence of appointments.
+        - If you have a to-do list, summarize the most important tasks for the day. Prioritize them by due date. If any tasks are overdue, remind the user.
+        - Highlight special occasions such as birthdays or anniversaries.
+        - Add emojis to make the message more engaging.
+        - Ensure correct grammar and meaningful sentence structure.
+        - Use paragraphs to organize different sections (weather, calendar, tasks).
+trigger:
+  platform: time
+  at: !input notify_time
+
+action:
+  - variables:
+      weather_entity: !input weather_entity
+      calendar_entity: !input calendar_entity
+      todo_entity: !input todo_entity
+      calendar_duration: !input calendar_duration
+      prompt: !input prompt
+      events_responses: []
+      custom_footer: !input custom_footer
+  - alias: Fetch Weather Forecast
+    service: weather.get_forecasts
+    data:
+      type: hourly
+    target:
+      entity_id: "{{ weather_entity }}"
+    response_variable: daily_forecast
+  - variables:
+      forecast_entity: "{{ daily_forecast[weather_entity] }}"
+      forecast: "{{ forecast_entity.forecast[0] }}"
+  - alias: Retrieve Calendar Events for Each Calendar
+    action: calendar.get_events
+    data:
+      duration: !input calendar_duration
+    target:
+      entity_id: !input calendar_entity
+    response_variable: calendar_response
+  - alias: Retrieve To-do Items
+    action: todo.get_items
+    data:
+      status:
+        - needs_action
+    target:
+      entity_id: !input todo_entity
+    response_variable: todo_response
+  - alias: "Create Notification Text"
+    service: conversation.process
+    data:
+      text: |-
+        Time: {{ now().strftime("%A %d. %B %H:%M") }}
+        {%- if weather_entity is defined %}
+        {%- set temperature_unit = state_attr(weather_entity, 'temperature_unit') -%}
+        Weather Forecast: {{ forecast.condition }} ({{ forecast.temperature }}{{ temperature_unit }}, {{ forecast.precipitation }}% precipitation)
+        {%- endif %}
+        {{calendar_response}}
+        {{todo_response}}
+        {{ prompt }}
+      agent_id: !input conversation_agent
+    response_variable: agent
+  - alias: "Send Message to Zalo"
+    service: zalo_bot.send_message
+    data:
+      message: >-
+        {{ agent.response.speech.plain.speech }}
+        {%- if custom_footer %}
+        
+        {{ custom_footer }}
+        {%- endif %}
+      thread_id: !input zalo_thread_id
+      account_selection: !input zalo_account_selection
+      type: !input zalo_type
+      ttl: !input zalo_ttl
+
+
+
+
+
+
+
+
+
+
+
