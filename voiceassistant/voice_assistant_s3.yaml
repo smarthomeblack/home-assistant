@@ -40,7 +40,7 @@ esp32:
       CONFIG_ESP32S3_DATA_CACHE_LINE_64B: "y"
 
 psram:
-  mode: quad
+  mode: octal
   speed: 80MHz
 
 api:
