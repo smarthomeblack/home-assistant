@@ -102,6 +102,9 @@ Dự án Voice Assistant sử dụng ESP32-S3 tích hợp với Home Assistant �
    - Chọn "Wake word engine location"
    - Chọn "On device" hoặc "In Home Assistant"
 
+5. **Tự động dừng hội thoại**:
+   - nói không cần, cảm ơn...thì sẽ tự động dừng hội thoại ngay, không cần phụ thuộc vào llm, tránh tốn stt và request quote
+ 
 ## 🔧 Tùy chỉnh
 
 ### Thay đổi wake word

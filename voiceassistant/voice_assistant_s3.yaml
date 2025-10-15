@@ -40,7 +40,7 @@ esp32:
       CONFIG_ESP32S3_DATA_CACHE_LINE_64B: "y"
 
 psram:
-  mode: octal
+  mode: quad
   speed: 80MHz
 
 api:
@@ -119,7 +119,7 @@ light:
     name: none
     disabled_by_default: false
     entity_category: config
-    pin: GPIO10
+    pin: GPIO48
     default_transition_length: 0s
     chipset: WS2812
     num_leds: 1
@@ -143,7 +143,7 @@ i2s_audio:
     i2s_lrclk_pin: GPIO12 #WS 
     i2s_bclk_pin: GPIO13  #SCK
   - id: i2s_audio_bus # For speaker
-    i2s_lrclk_pin: GPIO19
+    i2s_lrclk_pin: GPIO10
     i2s_bclk_pin: GPIO21
 
 microphone:
@@ -717,10 +717,23 @@ text_sensor:
     entity_category: diagnostic 
     on_value:
       lambda: |-
-        if(id(text_request).state.length()>500) {
+        if(id(text_request).state.length() > 500) {
           std::string name = id(text_request).state.c_str();
-          std::string truncated = esphome::str_truncate(name.c_str(),499);
-          id(text_request).state = (truncated+"...").c_str();
+          std::string truncated = esphome::str_truncate(name.c_str(), 499);
+          id(text_request).state = (truncated + "...").c_str();
+        }
+        std::string request = id(text_request).state.c_str();
+        if (request.find("không cần") != std::string::npos ||
+            request.find("Không cần") != std::string::npos ||
+            request.find("cảm ơn") != std::string::npos ||
+            request.find("Cảm ơn") != std::string::npos ||
+            request.find("dừng lại") != std::string::npos ||
+            request.find("Dừng lại") != std::string::npos ||
+            request.find("stop") != std::string::npos ||
+            request.find("Stop") != std::string::npos ||
+            request.find("Phẩy") != std::string::npos ||
+            request.find("phẩy") != std::string::npos) {
+          id(va)->request_stop();
         }
   - id: text_response
     platform: template
