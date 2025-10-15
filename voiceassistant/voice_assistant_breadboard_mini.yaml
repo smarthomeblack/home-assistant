@@ -1,9 +1,29 @@
 # Fix hiển thị tiếng việt...
 # Thêm nhiều tính năng như ting khi llm nói xong, ting khi kết thúc hội thoại...
 # Thêm bật tắt tính năng trò chuyện liên tục...
+# Thêm chữ chạy...
 substitutions:
-  name: voiceassistantdualblack
-  friendly_name: ESP32S3 Assistant
+  name: voiceassistantdisplay
+  friendly_name: ESP32S3 Assistant Display
+  imagemodel: "Eyes2" # (options are: Eyes2)
+  imagewidth: "128" # ILI9341 (breadboard 2.4") "240" or GC9A01A (Ball v1) "240" or ST7789V (Xingzhi Cube) "240"
+  imageheight: "64" # ILI9341 (breadboard 2.4") "320" or GC9A01A (Ball v1) "240" or ST7789V (Xingzhi Cube) "240"
+  loading_illustration_file: https://github.com/RealDeco/xiaozhi-esphome/raw/main/images/${imagemodel}/${imagewidth}x${imageheight}/loading.png
+  idle_illustration_file: https://github.com/RealDeco/xiaozhi-esphome/raw/main/images/${imagemodel}/${imagewidth}x${imageheight}/idle.png
+  listening_illustration_file: https://github.com/RealDeco/xiaozhi-esphome/raw/main/images/${imagemodel}/${imagewidth}x${imageheight}/listening.png
+  thinking_illustration_file: https://github.com/RealDeco/xiaozhi-esphome/raw/main/images/${imagemodel}/${imagewidth}x${imageheight}/thinking.png
+  replying_illustration_file: https://github.com/RealDeco/xiaozhi-esphome/raw/main/images/${imagemodel}/${imagewidth}x${imageheight}/replying.png
+  error_illustration_file: https://github.com/RealDeco/xiaozhi-esphome/raw/main/images/${imagemodel}/${imagewidth}x${imageheight}/error.png
+  timer_finished_illustration_file: https://github.com/RealDeco/xiaozhi-esphome/raw/main/images/${imagemodel}/${imagewidth}x${imageheight}/timer_finished.png
+  mute_illustration_file: https://github.com/RealDeco/xiaozhi-esphome/raw/main/images/Mute/${imagewidth}x${imageheight}/mute.png
+  loading_illustration_background_color: "000000"
+  idle_illustration_background_color: "000000"
+  listening_illustration_background_color: "000000"
+  thinking_illustration_background_color: "000000"
+  replying_illustration_background_color: "000000"
+  error_illustration_background_color: "000000"
+  allowed_characters: "aàáảãạăằắẳẵặâầấẩẫậbcdđeèéẻẽẹêềếểễệghiìíỉĩịklmnoòóỏõọôồốổỗộơờớởỡợpqrstuùúủũụưừứửữựvxyỳýỷỹỵAÀÁẢÃẠĂẰẮẲẴẶÂẦẤẨẪẬBCDĐEÈÉẺẼẸÊỀẾỂỄỆGHIÌÍỈĨỊKLMNOÒÓỎÕỌÔỒỐỔỖỘƠỜỚỞỠỢPQRSTUÙÚỦŨỤƯỪỨỬỮỰVXYỲÝỶỸỴ0123456789 !,.?-+%&*@#$()/\\:;<>[]{}| "
+  font_family: "Noto Sans"
   wake_word_triggered_sound_file: start.wav
   end_sound_file: end.flac
   voice_assist_idle_phase_id: "1"
@@ -23,12 +43,14 @@ esphome:
   on_boot:
     priority: 600
     then:
+      - script.execute: draw_display
       - delay: 30s
       - if:
           condition:
             lambda: return id(init_in_progress);
           then:
             - lambda: id(init_in_progress) = false;
+            - script.execute: draw_display
             - switch.turn_off: mute
 
 esp32:
@@ -47,7 +69,17 @@ psram:
   speed: 80MHz
 
 api:
-
+  on_client_connected:
+    - script.execute: draw_display
+    - lambda: |-
+        if (!id(boot_sound_played)) {
+          id(boot_sound_played) = true;
+          if (id(startup_sound_switch).state) {
+            id(play_sound)->execute(true, id(wake_word_triggered_sound));
+          }
+        }
+  on_client_disconnected:
+    - script.execute: draw_display
 ota:
   - platform: esphome
     id: ota_esphome
@@ -61,7 +93,10 @@ wifi:
   ap:
     ssid: "ESP32S3 Assistant"
     password: "11223344"
-
+  on_connect:
+    - script.execute: draw_display
+  on_disconnect:
+    - script.execute: draw_display
 captive_portal:
 
 button:
@@ -142,18 +177,18 @@ light:
           max_brightness: 100%
 
 i2s_audio:
-  - id: i2s_mic # For microphone
-    i2s_lrclk_pin: GPIO12 #WS 
-    i2s_bclk_pin: GPIO13  #SCK
-  - id: i2s_audio_bus # For speaker
-    i2s_lrclk_pin: GPIO10
-    i2s_bclk_pin: GPIO21
+  - id: i2s_mic # For INMP441
+    i2s_lrclk_pin: GPIO4 #WS 
+    i2s_bclk_pin: GPIO5  #SCK
+  - id: i2s_audio_bus # For MAX98357A
+    i2s_lrclk_pin: GPIO16
+    i2s_bclk_pin: GPIO15
 
 microphone:
   - platform: i2s_audio
     i2s_audio_id: i2s_mic
     adc_type: external
-    i2s_din_pin: GPIO11 #SD
+    i2s_din_pin: GPIO6 #SD INMP441
     id: i2s_mics
     channel: left
     pdm: false
@@ -165,7 +200,7 @@ speaker:
     i2s_audio_id: i2s_audio_bus
     dac_type: external
     i2s_dout_pin:   
-      number: GPIO20 # DIN Pin of the MAX98357A Audio Amplifier
+      number: GPIO7 # DIN MAX98357A
     channel: stereo
     buffer_duration: 1000ms
 
@@ -216,7 +251,6 @@ media_player:
           then:
 
     on_idle:
-      # Since VA isn't running, this is the end of user-intiated media playback. Restart the wake word.
       - script.execute: reset_led
       - if:
           condition:
@@ -225,6 +259,7 @@ media_player:
           then:
             - script.execute: start_wake_word
             - script.execute: set_idle_or_mute_phase
+            - script.execute: draw_display
 
 micro_wake_word:
   id: mww
@@ -283,6 +318,7 @@ voice_assistant:
     - text_sensor.template.publish:
         id: text_response
         state: "..."
+    - script.execute: draw_display
   on_stt_vad_end:
     - if:
         condition:
@@ -296,10 +332,12 @@ voice_assistant:
               effect: "Fast Pulse"
     - lambda: id(voice_assistant_phase) = ${voice_assist_thinking_phase_id};
     - microphone.mute: 
+    - script.execute: draw_display
   on_stt_end:
     - text_sensor.template.publish:
         id: text_request
-        state: !lambda return x;   
+        state: !lambda return x; 
+    - script.execute: draw_display        
   on_tts_start:
     - if:
         condition:
@@ -316,7 +354,8 @@ voice_assistant:
         id: text_response
         state: !lambda return x;
     - lambda: id(voice_assistant_phase) = ${voice_assist_replying_phase_id};
-
+    - script.execute: draw_display
+    
   on_end:
     - microphone.unmute:
     - lambda: id(wake_word_just_triggered) = false;
@@ -354,6 +393,7 @@ voice_assistant:
           - lambda: id(va).set_use_wake_word(false);
           - micro_wake_word.start:
     - script.execute: set_idle_or_mute_phase
+    - script.execute: draw_display
     - text_sensor.template.publish:
         id: text_request
         state: ""
@@ -380,6 +420,7 @@ voice_assistant:
           lambda: return !id(init_in_progress);
         then:
           - lambda: id(voice_assistant_phase) = ${voice_assist_error_phase_id};
+          - script.execute: draw_display
           - delay: 1s
           - if:
               condition:
@@ -388,6 +429,7 @@ voice_assistant:
                 - lambda: id(voice_assistant_phase) = ${voice_assist_idle_phase_id};
               else:
                 - lambda: id(voice_assistant_phase) = ${voice_assist_muted_phase_id};
+          - script.execute: draw_display
     - if:
         condition:
           - switch.is_on: use_listen_light
@@ -405,9 +447,19 @@ voice_assistant:
     - lambda: id(init_in_progress) = false;
     - script.execute: start_wake_word
     - script.execute: set_idle_or_mute_phase
+    - script.execute: draw_display
   on_client_disconnected:
     - script.execute: stop_wake_word
     - lambda: id(voice_assistant_phase) = ${voice_assist_not_ready_phase_id};
+    - script.execute: draw_display
+  on_timer_started:
+    - script.execute: draw_display
+  on_timer_cancelled:
+    - script.execute: draw_display
+  on_timer_updated:
+    - script.execute: draw_display
+  on_timer_tick:
+    - script.execute: draw_display
   on_timer_finished:
     - switch.turn_on: timer_ringing
     - if:
@@ -424,6 +476,7 @@ voice_assistant:
     - wait_until:
         media_player.is_announcing:
     - lambda: id(voice_assistant_phase) = ${voice_assist_timer_finished_phase_id};
+    - script.execute: draw_display
     - light.turn_off: led
 
 script:
@@ -456,6 +509,65 @@ script:
                       effect: none
                 else:
                   - light.turn_off: led
+  - id: draw_display
+    then:
+      - if:
+          condition:
+            lambda: return !id(init_in_progress);
+          then:
+            - if:
+                condition:
+                  wifi.connected:
+                then:
+                  - if:
+                      condition:
+                        api.connected:
+                      then:
+                        - lambda: |
+                            switch(id(voice_assistant_phase)) {
+                              case ${voice_assist_listening_phase_id}:
+                                id(s3_box_lcd).show_page(listening_page);
+                                id(s3_box_lcd).update();
+                                break;
+                              case ${voice_assist_thinking_phase_id}:
+                                id(s3_box_lcd).show_page(thinking_page);
+                                id(s3_box_lcd).update();
+                                break;
+                              case ${voice_assist_replying_phase_id}:
+                                id(s3_box_lcd).show_page(replying_page);
+                                id(s3_box_lcd).update();
+                                break;
+                              case ${voice_assist_error_phase_id}:
+                                id(s3_box_lcd).show_page(error_page);
+                                id(s3_box_lcd).update();
+                                break;
+                              case ${voice_assist_muted_phase_id}:
+                                id(s3_box_lcd).show_page(muted_page);
+                                id(s3_box_lcd).update();
+                                break;
+                              case ${voice_assist_not_ready_phase_id}:
+                                id(s3_box_lcd).show_page(no_ha_page);
+                                id(s3_box_lcd).update();
+                                break;
+                              case ${voice_assist_timer_finished_phase_id}:
+                                id(s3_box_lcd).show_page(timer_finished_page);
+                                id(s3_box_lcd).update();
+                                break;
+                              default:
+                                id(s3_box_lcd).show_page(idle_page);
+                                id(s3_box_lcd).update();
+                            }
+                      else:
+                        - display.page.show: no_ha_page
+                        - component.update: s3_box_lcd
+                else:
+                  - display.page.show: no_wifi_page
+                  - component.update: s3_box_lcd
+          else:
+            - display.page.show: initializing_page
+            - component.update: s3_box_lcd
+
+
   - id: fetch_first_active_timer
     then:
       - lambda: |
@@ -500,6 +612,50 @@ script:
             output = true;
           }
           id(global_is_timer) = output;
+  - id: draw_timer_timeline
+    then:
+      - lambda: |
+          id(check_if_timers_active).execute();
+          id(check_if_timers).execute();
+          if (id(global_is_timer_active)){
+            id(fetch_first_active_timer).execute();
+            int active_pixels = round( 320 * id(global_first_active_timer).seconds_left / max(id(global_first_active_timer).total_seconds , static_cast<uint32_t>(1)) );
+            if (active_pixels > 0){
+              id(s3_box_lcd).filled_rectangle(0 , 225 , 240 , 15 , Color::WHITE );
+              id(s3_box_lcd).filled_rectangle(0 , 226 , active_pixels , 13 , id(active_timer_color) );
+            }
+          } else if (id(global_is_timer)){
+            id(fetch_first_timer).execute();
+            int active_pixels = round( 320 * id(global_first_timer).seconds_left / max(id(global_first_timer).total_seconds , static_cast<uint32_t>(1)));
+            if (active_pixels > 0){
+              id(s3_box_lcd).filled_rectangle(0 , 225 , 240 , 15 , Color::WHITE );
+              id(s3_box_lcd).filled_rectangle(0 , 226 , active_pixels , 13 , id(paused_timer_color) );
+            }
+          }
+  - id: draw_active_timer_widget
+    then:
+      - lambda: |
+          id(check_if_timers_active).execute();
+          if (id(global_is_timer_active)){
+            id(s3_box_lcd).filled_rectangle(80 , 40 , 160 , 50 , Color::WHITE );
+            id(s3_box_lcd).rectangle(80 , 40 , 160 , 50 , Color::BLACK );
+
+            id(fetch_first_active_timer).execute();
+            int hours_left = floor(id(global_first_active_timer).seconds_left / 3600);
+            int minutes_left = floor((id(global_first_active_timer).seconds_left - hours_left * 3600) / 60);
+            int seconds_left = id(global_first_active_timer).seconds_left - hours_left * 3600 - minutes_left * 60 ;
+            auto display_hours = (hours_left < 10 ? "0" : "") + std::to_string(hours_left);
+            auto display_minute = (minutes_left < 10 ? "0" : "") + std::to_string(minutes_left);
+            auto display_seconds = (seconds_left  < 10 ? "0" : "") + std::to_string(seconds_left) ;
+
+            std::string display_string = "";
+            if (hours_left > 0) {
+              display_string = display_hours + ":" + display_minute;
+            } else {
+              display_string = display_minute + ":" + display_seconds;
+            }
+            id(s3_box_lcd).printf(120, 47, id(font_timer), Color::BLACK, "%s", display_string.c_str());
+          }
   - id: start_wake_word
     then:
       - if:
@@ -581,9 +737,11 @@ switch:
     on_turn_off:
       - microphone.unmute:
       - lambda: id(voice_assistant_phase) = ${voice_assist_idle_phase_id};
+      - script.execute: draw_display
     on_turn_on:
       - microphone.mute:
       - lambda: id(voice_assistant_phase) = ${voice_assist_muted_phase_id};
+      - script.execute: draw_display
   - platform: template
     id: timer_ringing
     optimistic: true
@@ -632,11 +790,22 @@ switch:
     icon: "mdi:restart-alert"
     optimistic: true
     restore_mode: RESTORE_DEFAULT_OFF
+
+  - platform: template
+    id: startup_sound_switch
+    name: Startup sound
+    icon: "mdi:card-text-outline"
     entity_category: config
-    on_turn_on:
-      - logger.log: "Stop to Wake after Reply: ON"
-    on_turn_off:
-      - logger.log: "Stop to Wake after Reply: OFF"
+    optimistic: true
+    restore_mode: RESTORE_DEFAULT_ON
+
+  - platform: template
+    id: show_text
+    name: Show Text
+    icon: "mdi:card-text-outline"
+    entity_category: config
+    optimistic: true
+    restore_mode: RESTORE_DEFAULT_ON
 
 select:
   - platform: template
@@ -683,6 +852,14 @@ select:
                         - micro_wake_word.start
 
 globals:
+  - id: text_request_offset
+    type: int
+    restore_value: false
+    initial_value: "0"
+  - id: text_response_offset
+    type: int
+    restore_value: false
+    initial_value: "0"
   - id: wake_word_just_triggered
     type: bool
     restore_value: false
@@ -711,6 +888,88 @@ globals:
     type: bool
     restore_value: no
     initial_value: "false"
+
+image:
+  - file: ${error_illustration_file}
+    id: casita_error
+    resize: ${imagewidth}x${imageheight}
+    type: RGB
+    transparency: alpha_channel
+  - file: ${idle_illustration_file}
+    id: casita_idle
+    resize: ${imagewidth}x${imageheight}
+    type: RGB
+    transparency: alpha_channel
+  - file: ${listening_illustration_file}
+    id: casita_listening
+    resize: ${imagewidth}x${imageheight}
+    type: RGB
+    transparency: alpha_channel
+  - file: ${thinking_illustration_file}
+    id: casita_thinking
+    resize: ${imagewidth}x${imageheight}
+    type: RGB
+    transparency: alpha_channel
+  - file: ${replying_illustration_file}
+    id: casita_replying
+    resize: ${imagewidth}x${imageheight}
+    type: RGB
+    transparency: alpha_channel
+  - file: ${timer_finished_illustration_file}
+    id: casita_timer_finished
+    resize: ${imagewidth}x${imageheight}
+    type: RGB
+    transparency: alpha_channel
+  - file: ${loading_illustration_file}
+    id: casita_initializing
+    resize: ${imagewidth}x${imageheight}
+    type: RGB
+    transparency: alpha_channel
+  - file: ${mute_illustration_file}
+    id: casita_muted
+    resize: ${imagewidth}x${imageheight}
+    type: RGB
+    transparency: alpha_channel
+  - file: https://github.com/esphome/wake-word-voice-assistants/raw/main/error_box_illustrations/error-no-wifi.png
+    id: error_no_wifi
+    resize: ${imagewidth}x${imageheight}
+    type: RGB
+    transparency: alpha_channel
+  - file: https://github.com/esphome/wake-word-voice-assistants/raw/main/error_box_illustrations/error-no-ha.png
+    id: error_no_ha
+    resize: ${imagewidth}x${imageheight}
+    type: RGB
+    transparency: alpha_channel
+
+font:
+  - file:
+      type: gfonts
+      family: Noto Sans
+      weight: 300
+      italic: true
+    id: font_request
+    size: 10
+    glyphsets:
+      - GF_Latin_Kernel
+      - GF_Latin_Vietnamese
+  - file:
+      type: gfonts
+      family: Noto Sans
+      weight: 300
+    id: font_response
+    size: 10
+    glyphsets:
+      - GF_Latin_Kernel
+      - GF_Latin_Vietnamese
+  - file:
+      type: gfonts
+      family: Noto Sans
+      weight: 300
+    id: font_timer
+    size: 30
+    glyphsets:
+      - GF_Latin_Kernel
+      - GF_Latin_Vietnamese
 
 text_sensor:
   - id: text_request
@@ -751,3 +1010,147 @@ text_sensor:
           id(text_response).state = (truncated+"...").c_str();
         }	
 
+color:
+  - id: idle_color
+    hex: ${idle_illustration_background_color}
+  - id: listening_color
+    hex: ${listening_illustration_background_color}
+  - id: thinking_color
+    hex: ${thinking_illustration_background_color}
+  - id: replying_color
+    hex: ${replying_illustration_background_color}
+  - id: loading_color
+    hex: ${loading_illustration_background_color}
+  - id: error_color
+    hex: ${error_illustration_background_color}
+  - id: active_timer_color
+    hex: "26ed3a"
+  - id: paused_timer_color
+    hex: "3b89e3"
+
+i2c:
+  sda: 41
+  scl: 42
+  frequency: 800kHz
+
+display:
+  - platform: ssd1306_i2c
+    id: s3_box_lcd
+    model: "SH1106 128x64"
+    address: 0x3C
+    update_interval: 150ms
+    contrast: 60%
+    auto_clear_enabled: true
+
+    pages:
+      - id: idle_page
+        lambda: |-
+          it.fill(id(idle_color));
+          it.image((it.get_width() / 2), (it.get_height() / 2), id(casita_idle), ImageAlign::CENTER);
+          id(draw_timer_timeline).execute();
+          id(draw_active_timer_widget).execute();
+      - id: listening_page
+        lambda: |-
+          it.fill(id(listening_color));
+          it.image((it.get_width() / 2), (it.get_height() / 2), id(casita_listening), ImageAlign::CENTER);
+          id(draw_timer_timeline).execute();
+      - id: thinking_page
+        lambda: |-
+          it.fill(Color::BLACK);
+          if (id(show_text).state) {
+            std::string req_text = id(text_request).state.c_str();
+            // Đếm số ký tự UTF-8
+            int char_count = 0;
+            for (size_t i = 0; i < req_text.length(); ++i) {
+              if ((unsigned char)req_text[i] < 0x80) {
+                char_count++;
+              } else if ((unsigned char)req_text[i] == 0xC3 && i + 1 < req_text.length() && ((unsigned char)req_text[i + 1] & 0xC0) == 0x80) {
+                char_count++;
+                ++i;
+              }
+            }
+            int req_width = char_count * 7;  // 7 pixel mỗi ký tự
+            int rect_width = 100;
+            int scroll_speed = 1;
+            int pause_frames = 5;
+            if (req_width > rect_width) {
+              id(text_request_offset) += scroll_speed;
+              if (id(text_request_offset) >= req_width - rect_width + pause_frames) {
+                id(text_request_offset) = -pause_frames;
+              }
+            } else {
+              id(text_request_offset) = 0;
+            }
+            it.filled_rectangle(14, 20, 100, 14, Color::BLACK);
+            it.rectangle(14, 20, 100, 14, Color::BLACK);
+            int x_pos = 14 - id(text_request_offset);
+            if (req_width <= rect_width) x_pos = 14 + (rect_width - req_width) / 2;
+            it.image((it.get_width() / 2), (it.get_height() / 2), id(casita_thinking), ImageAlign::CENTER);
+            it.printf(x_pos, 22, id(font_request), Color::WHITE, "%s", req_text.c_str());
+            ESP_LOGD("thinking_page", "req_text: %s, char_count: %d, req_width: %d, offset: %d", req_text.c_str(), char_count, req_width, id(text_request_offset));
+          } else {
+            it.image((it.get_width() / 2), (it.get_height() / 2), id(casita_thinking), ImageAlign::CENTER);
+          }
+          id(draw_timer_timeline).execute();
+      - id: replying_page
+        lambda: |-
+          it.fill(Color::BLACK);
+          if (id(show_text).state) {
+            std::string res_text = id(text_response).state.c_str();
+            // Đếm số ký tự UTF-8
+            int char_count = 0;
+            for (size_t i = 0; i < res_text.length(); ++i) {
+              if ((unsigned char)res_text[i] < 0x80) {
+                char_count++;
+              } else if ((unsigned char)res_text[i] == 0xC3 && i + 1 < res_text.length() && ((unsigned char)res_text[i + 1] & 0xC0) == 0x80) {
+                char_count++;
+                ++i;
+              }
+            }
+            int res_width = char_count * 7;  // 7 pixel mỗi ký tự
+            int rect_width = 100;
+            int scroll_speed = 5;
+            int pause_frames = 5;
+            if (res_width > rect_width) {
+              id(text_response_offset) += scroll_speed;
+              if (id(text_response_offset) >= res_width - rect_width + pause_frames) {
+                id(text_response_offset) = -pause_frames;
+              }
+            } else {
+              id(text_response_offset) = 0;
+            }
+            it.filled_rectangle(14, 50, 100, 14, Color::BLACK);
+            it.rectangle(14, 50, 100, 14, Color::BLACK);
+            int x_pos = 14 - id(text_response_offset);
+            if (res_width <= rect_width) x_pos = 14 + (rect_width - res_width) / 2;
+            it.image((it.get_width() / 2), (it.get_height() / 2), id(casita_replying), ImageAlign::CENTER);
+            it.printf(x_pos, 52, id(font_response), Color::WHITE, "%s", res_text.c_str());
+            ESP_LOGD("replying_page", "res_text: %s, char_count: %d, res_width: %d, offset: %d", res_text.c_str(), char_count, res_width, id(text_response_offset));
+          } else {
+            it.image((it.get_width() / 2), (it.get_height() / 2), id(casita_replying), ImageAlign::CENTER);
+          }
+          id(draw_timer_timeline).execute();
+      - id: timer_finished_page
+        lambda: |-
+          it.fill(id(idle_color));
+          it.image((it.get_width() / 2), (it.get_height() / 2), id(casita_timer_finished), ImageAlign::CENTER);
+      - id: error_page
+        lambda: |-
+          it.fill(id(error_color));
+          it.image((it.get_width() / 2), (it.get_height() / 2), id(casita_error), ImageAlign::CENTER);
+      - id: no_ha_page
+        lambda: |-
+          it.image((it.get_width() / 2), (it.get_height() / 2), id(error_no_ha), ImageAlign::CENTER);
+      - id: no_wifi_page
+        lambda: |-
+          it.image((it.get_width() / 2), (it.get_height() / 2), id(error_no_wifi), ImageAlign::CENTER);
+      - id: initializing_page
+        lambda: |-
+          it.fill(id(loading_color));
+          it.image((it.get_width() / 2), (it.get_height() / 2), id(casita_initializing), ImageAlign::CENTER);
+      - id: muted_page
+        lambda: |-
+          it.fill(Color::BLACK);
+          it.image((it.get_width() / 2), (it.get_height() / 2), id(casita_muted), ImageAlign::CENTER);
+          id(draw_timer_timeline).execute();
+          id(draw_active_timer_widget).execute();
