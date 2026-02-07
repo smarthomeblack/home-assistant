@@ -1,0 +1,418 @@
+blueprint:
+  name: Zing MP3 Search & Play
+  author: smarthomeblack
+  description: |
+    # Blueprint for searching and playing Zing MP3 music
+    
+    ## Requirements
+    * Installed and configured zingmp3_player integration.
+    
+    * Media_player for zingmp3_player.
+    
+    ## Functions
+    * Search for music, playlists, singers, albums on Zing MP3.
+    * Returns a list of results for LLM to read to users.
+    * Supports selecting the number of results, result types, keywords, entity_id.
+    
+    ## Note
+    * Do not change the default script name.
+    * Expose the script to Assist after saving.
+    * Ensure the entity_id is in the correct format media_player.zingmp3_player.
+
+  domain: script
+  homeassistant:
+    min_version: 2024.10.0
+  input:
+    music_settings:
+      name: Music Settings
+      icon: mdi:music
+      description: Select media_player và số lượng kết quả trả về khi tìm kiếm nhạc.
+      input:
+        entity_id:
+          name: Entity ID
+          description: Select media_player to play music
+          selector:
+            text:
+          default: media_player.zingmp3_player
+        limit:
+          name: Limit
+          description: Select the number of results to return (1-20)
+          selector:
+            number:
+              min: 1
+              max: 20
+              step: 1
+          default: 5
+    prompt_settings:
+      name: Prompt settings for the LLM
+      icon: mdi:robot
+      description: Configure prompt for LLM to enter music search information.
+      collapsed: true
+      input:
+        playsearch_prompt:
+          name: Action Prompt
+          description: Select action to perform.
+          selector:
+            select:
+              options:
+                - play
+                - search
+                - pause
+                - resume
+                - next
+                - previous
+          default: >-
+            - This parameter is required.
+            - Select action based on user request:
+              * "play" or "search" - for playing/searching music (see rules below)
+              * "pause" - when user requests to pause music (e.g., "tạm dừng", "pause", "dừng lại")
+              * "resume" - when user requests to resume/continue playing (e.g., "tiếp tục", "resume", "phát tiếp")
+              * "next" - when user requests next track (e.g., "bài tiếp", "next", "skip")
+              * "previous" - when user requests previous track (e.g., "bài trước", "previous", "quay lại")
+              * "shuffle" - when user requests to toggle shuffle/random mode (e.g., "bật random", "tắt shuffle", "shuffle on/off")
+              * "repeat" - when user requests to change repeat mode (e.g., "bật lặp lại", "repeat all/one/off")
+            - IMPORTANT: If the user requests to play music (e.g., "play song X", "phát bài Y", "play playlist Z") and you do NOT have a media_content_id from previous search results, you MUST:
+              1. First call this tool with playsearch="search" to search for the music
+              2. Wait for search results
+              3. Then call this tool again with playsearch="play" and use the media_content_id from the first result (search_results[0])
+            - If the user explicitly requests to search (e.g., "find songs", "search for..."), select "search". After search, only inform the number of results found, do NOT read the entire list unless the user explicitly asks.
+            - If the user requests to play AND you already have media_content_id from previous search results, select "play" and use that media_content_id.
+            - CRITICAL: You CANNOT call playsearch="play" without media_content_id. If you don't have media_content_id, you MUST search first!
+            - Control actions (pause, resume, next, previous, shuffle, repeat) are independent and do NOT require search or media_content_id. They can be called directly.
+            - When playing music, shuffle defaults to "true" (random) and repeat defaults to "off" (no repeat). Only change these if user explicitly requests shuffle/repeat settings.
+        query_prompt:
+          name: Query Prompt
+          description: Enter keywords to search for songs, playlists, singers, albums.
+          selector:
+            text:
+              multiline: true
+          default: >-
+            Enter the keyword you want to search for.
+            - If performing a search, enter the search keyword (song name, playlist name, etc.).
+            - IMPORTANT: If performing a play, you MUST have already searched and obtained media_content_id. If you don't have media_content_id, you MUST search first, then play. Leave blank if you already have media_content_id from previous search.
+        filter_prompt:
+          name: Filter Prompt
+          description: Choose could type search.
+          selector:
+            select:
+              options:
+                - songs
+                - playlists
+          default: >-
+            - This parameter is required..
+            - Based on user requirements to choose the appropriate one,
+            - Zing MP3 supports: songs, playlists
+        source_prompt:
+          name: Source Prompt
+          description: List of executable speakers
+          selector:
+            text:
+              multiline: true
+          default: >- 
+            Below is the list of available speakers for users, select one of the speakers according to user requirements.
+            - loa google: media_player.googlehome6310
+            - Loa Đôi: media_player.voiceassistantdualblack
+            - IMPORTANT: media_player.zingmp3_player is NOT a speaker - it is the music player controller. DO NOT select it as a speaker. Only select actual speakers from the list above.
+            - Please enter the correct entity_id of the speaker you want to play music on (e.g. media_player.googlehome6310), if you are searching for music, leave it blank.
+        media_content_id_prompt:
+          name: Media Content ID Prompt
+          description: ID of song, songs, album...
+          selector:
+            text:
+          default: >-
+            Enter the media_content_id from search_results to play a specific item.
+            - REQUIRED for play: You MUST have media_content_id from a previous search. If user requests to play but you don't have media_content_id, you MUST search first, then use media_content_id from search_results[0] (first result).
+            - If searching for music, leave blank.
+            - If playing without media_content_id, you are doing it WRONG - search first!
+        media_content_type_prompt:
+          name: Media Content Type
+          description: Media Type
+          selector:
+            text:
+          default: Enter the media_content_type obtained when searching, if searching for music then leave blank.
+        shuffle_prompt:
+          name: Shuffle Prompt
+          description: Enable or disable shuffle (random) mode.
+          selector:
+            text:
+          default: >-
+            Enable shuffle (random) mode. 
+            - Set to "true" to enable shuffle (play songs randomly)
+            - Set to "false" to disable shuffle (play songs in order)
+            - Default is "true" (shuffle enabled)
+            - Leave blank to use default
+        repeat_prompt:
+          name: Repeat Prompt
+          description: Set repeat mode.
+          selector:
+            text:
+          default: >-
+            Set repeat mode for playback.
+            - "off" - No repeat (default, play once and stop)
+            - "one" - Repeat current song (loop one song)
+            - "all" - Repeat entire playlist/queue (loop all songs)
+            - Default is "off" (no repeat) - play once and stop
+            - Only change if user explicitly requests repeat mode (e.g., "lặp lại", "repeat", "loop")
+            - Leave blank to use default (off)
+mode: queued
+max: 10
+max_exceeded: silent
+variables:
+  version: 20250112
+fields:
+  playsearch:
+    name: Action
+    description: !input playsearch_prompt
+    selector:
+      select:
+        options:
+          - play
+          - search
+          - pause
+          - resume
+          - next
+          - previous
+    required: true
+  query:
+    name: Search keywords
+    description: !input query_prompt
+    selector:
+      text:
+    required: true
+  filter:
+    name: Filter results
+    description: !input filter_prompt
+    selector:
+      text:
+    required: true
+  source:
+    name: Source
+    description: !input source_prompt
+    selector:
+      text:
+  media_content_id:
+    name: Media Content ID
+    description: !input media_content_id_prompt
+    selector:
+      text:
+  media_content_type:
+    name: Media Content Type
+    description: !input media_content_type_prompt
+    selector:
+      text:
+  enable_shuffle:
+    name: Shuffle
+    description: !input shuffle_prompt
+    selector:
+      boolean:
+    default: true
+  repeat_mode:
+    name: Repeat Mode
+    description: !input repeat_prompt
+    selector:
+      select:
+        options:
+          - "off"
+          - "one"
+          - "all"
+    default: "off"
+sequence:
+  - variables:
+      entity_id: !input entity_id
+      limit: !input limit
+      playsearch: "{{ playsearch | default('search') | trim | lower }}"
+      query: "{{ query | default('') | trim }}"
+      filter: "{{ filter | default('songs') | trim | lower }}"
+      source: "{{ source | default('') | trim }}"
+      media_content_id: "{{ media_content_id | default('') | trim }}"
+      media_content_type: "{{ media_content_type | default('') | trim }}"
+      enable_shuffle: "{{ enable_shuffle | default(true) }}"
+      repeat_mode: "{{ repeat_mode | default('off') | trim | lower }}"
+      entity_name: "{{ entity_id | replace('media_player.', '') }}"
+      sensor_entity_id: "{{ 'sensor.' ~ entity_name ~ '_extra' }}"
+  - choose:
+      - conditions:
+          - condition: template
+            value_template: "{{ playsearch == 'search' }}"
+        sequence:
+          - service: zingmp3_player.search
+            data:
+              limit: !input limit
+              entity_id: !input entity_id
+              query: "{{ query }}"
+              filter: "{{ filter }}"
+          - wait_template: "{{ state_attr(sensor_entity_id, 'search') is defined and state_attr(sensor_entity_id, 'search') is iterable and (state_attr(sensor_entity_id, 'search') | length) > 0 }}"
+            timeout: "00:00:10"
+          - variables:
+              search_attr: "{{ state_attr(sensor_entity_id, 'search') }}"
+              search_data: "{{ search_attr if search_attr is iterable and search_attr is not string else [] }}"
+              search_results_list: >-
+                {%- if search_data | length > 0 -%}
+                  {%- for item in search_data -%}
+                    {{ loop.index }}. {{ item.title }} (ID: {{ item.id }}, Type: {{ item.type }})
+                    {%- if not loop.last -%}
+                    
+                    {%- endif -%}
+                  {%- endfor -%}
+                {%- else -%}
+                  No results found.
+                {%- endif -%}
+              search_results_json: >-
+                [
+                {%- for item in search_data -%}
+                  {%- set media_type = 'music' if item.type == 'songs' else 'playlist' -%}
+                  {
+                    "number": {{ loop.index }},
+                    "title": {{ item.title | to_json }},
+                    "media_content_id": {{ item.id | to_json }},
+                    "media_content_type": {{ media_type | to_json }}
+                  }{%- if not loop.last -%},{%- endif -%}
+                {%- endfor -%}
+                ]
+              response:
+                status: "success"
+                message: >-
+                  Found {{ search_data | length }} results for "{{ query }}". 
+                  The search_results JSON array contains all results with media_content_id and media_content_type.
+                  
+                  CRITICAL RULES - YOU MUST FOLLOW EXACTLY:
+                  1. If user requested to SEARCH (not play): 
+                     - Say ONLY "Found {{ search_data | length }} results" 
+                     - DO NOT read the list. DO NOT show titles. DO NOT list items.
+                     - Just inform the number and wait for user's next request.
+                  2. If user requested to PLAY (not search):
+                     - IMMEDIATELY call this tool again with playsearch="play"
+                     - Use search_results[0].media_content_id and search_results[0].media_content_type
+                     - DO NOT ask user to choose. DO NOT read the list. Just play automatically.
+                  3. Only read/search_results when user explicitly asks: "read the list", "show results", "what are the results", "đọc danh sách", etc.
+                search_results: "{{ search_results_json }}"
+          - stop: ""
+            response_variable: response
+      - conditions:
+          - condition: template
+            value_template: "{{ playsearch == 'play' }}"
+        sequence:
+          - choose:
+              - conditions:
+                  - condition: template
+                    value_template: "{{ media_content_id == '' or media_content_id is none }}"
+                sequence:
+                  - variables:
+                      response:
+                        status: "error"
+                        message: "Cannot play without media_content_id. You must search first to get media_content_id from search_results."
+                  - stop: ""
+                    response_variable: response
+              - conditions:
+                  - condition: template
+                    value_template: "{{ media_content_id != '' and media_content_id is not none }}"
+                sequence:
+                  - service: media_player.select_source
+                    data:
+                      source: "{{ source }}"
+                    target:
+                      entity_id: !input entity_id
+                  - service: media_player.shuffle_set
+                    target:
+                      entity_id: !input entity_id
+                    data:
+                      shuffle: "{{ enable_shuffle }}"
+                  - service: media_player.repeat_set
+                    target:
+                      entity_id: !input entity_id
+                    data:
+                      repeat: "{{ repeat_mode }}"
+                  - service: media_player.play_media
+                    target:
+                      entity_id: !input entity_id
+                    data:
+                      media_content_id: "{{ media_content_id }}"
+                      media_content_type: "{{ media_content_type }}"
+                  - variables:
+                      response:
+                        status: "success"
+                        message: "Music played successfully"
+                  - stop: ""
+                    response_variable: response
+      - conditions:
+          - condition: template
+            value_template: "{{ playsearch == 'pause' }}"
+        sequence:
+          - service: media_player.media_pause
+            target:
+              entity_id: !input entity_id
+          - variables:
+              response:
+                status: "success"
+                message: "Music paused successfully"
+          - stop: ""
+            response_variable: response
+      - conditions:
+          - condition: template
+            value_template: "{{ playsearch == 'resume' }}"
+        sequence:
+          - service: media_player.media_play
+            target:
+              entity_id: !input entity_id
+          - variables:
+              response:
+                status: "success"
+                message: "Music resumed successfully"
+          - stop: ""
+            response_variable: response
+      - conditions:
+          - condition: template
+            value_template: "{{ playsearch == 'next' }}"
+        sequence:
+          - service: media_player.media_next_track
+            target:
+              entity_id: !input entity_id
+          - variables:
+              response:
+                status: "success"
+                message: "Playing next track"
+          - stop: ""
+            response_variable: response
+      - conditions:
+          - condition: template
+            value_template: "{{ playsearch == 'previous' }}"
+        sequence:
+          - service: media_player.media_previous_track
+            target:
+              entity_id: !input entity_id
+          - variables:
+              response:
+                status: "success"
+                message: "Playing previous track"
+          - stop: ""
+            response_variable: response
+      - conditions:
+          - condition: template
+            value_template: "{{ playsearch == 'shuffle' }}"
+        sequence:
+          - service: media_player.shuffle_set
+            target:
+              entity_id: !input entity_id
+            data:
+              shuffle: "{{ enable_shuffle }}"
+          - variables:
+              response:
+                status: "success"
+                message: "Shuffle mode updated"
+          - stop: ""
+            response_variable: response
+      - conditions:
+          - condition: template
+            value_template: "{{ playsearch == 'repeat' }}"
+        sequence:
+          - service: media_player.repeat_set
+            target:
+              entity_id: !input entity_id
+            data:
+              repeat: "{{ repeat_mode }}"
+          - variables:
+              response:
+                status: "success"
+                message: "Repeat mode updated"
+          - stop: ""
+            response_variable: response

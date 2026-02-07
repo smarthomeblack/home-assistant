@@ -75,6 +75,23 @@ Bộ sưu tập các Blueprint thông minh cho Home Assistant với tích hợp 
 
 ---
 
+### 🎵 [Zing MP3 Search & Play](./playmusic/)
+**Tìm kiếm và phát nhạc Zing MP3 thông minh**
+
+**Tính năng:**
+- 🔍 Tìm kiếm bài hát, playlist, ca sĩ, album trên Zing MP3
+- ▶️ Phát nhạc tự động với tìm kiếm thông minh
+- ⏯️ Điều khiển phát nhạc: pause, resume, next, previous
+- 🔀 Điều khiển shuffle và repeat độc lập
+- 🗣️ Điều khiển bằng giọng nói
+- 🎯 Tự động tìm kiếm khi phát mà chưa có media_content_id
+- 📊 Hỗ trợ playlist với tự động lấy bài đầu tiên
+- 🎚️ Tùy chỉnh số lượng kết quả tìm kiếm (1-20)
+
+[📖 Xem chi tiết →](./playmusic/)
+
+---
+
 ### ☁️ [Weather Forecast](./weatherforecast/)
 **Dự báo thời tiết thông minh**
 
@@ -147,6 +164,7 @@ Bộ sưu tập các Blueprint thông minh cho Home Assistant với tích hợp 
 - **Voice Assistant:** Home Assistant Assist (tùy chọn)
 - **Zalo Bot:** Yêu cầu cho các blueprint Send Image và Traffic Fine
 - **Tasmota IR HVAC:** Yêu cầu cho chế độ Turbo/Econo của Climate Control
+- **zingmp3_player:** Yêu cầu cho blueprint Zing MP3 Search & Play (custom component)
 
 ---
 
