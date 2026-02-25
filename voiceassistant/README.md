@@ -2,6 +2,7 @@
 
 Dự án Voice Assistant sử dụng ESP32-S3 tích hợp với Home Assistant để tạo trợ lý giọng nói thông minh.
 - `voice_assistant_s3.yaml` : Tự buil phần cứng, không màn hình, nhớ sửa đổi GPIO cho đúng với bạn
+- `voice_assistant_s3_lcd.yaml` : Tự buil phần cứng, có màn hình, nhớ sửa đổi GPIO cho đúng với bạn
 - `voice_assistant_breadboard_mini.yaml` : mạch loa mic có sẵn mini có màn hình 0.9in . các chân là cố định,up là chạy
 
 ## 📋 Thông tin thiết bị

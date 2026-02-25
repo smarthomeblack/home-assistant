@@ -1,0 +1,1254 @@
+# Fix hiển thị tiếng việt...
+# Thêm nhiều tính năng như ting khi llm nói xong, ting khi kết thúc hội thoại...
+# Thêm bật tắt tính năng trò chuyện liên tục...
+# Thêm chữ chạy...
+substitutions:
+  name: voiceassistantdisplaynice
+  friendly_name: ESP32S3 Assistant Display
+  imagemodel: "Mario" # (options are: Eyes2)
+  imagewidth: "240" # Images có sẵn là 240x320
+  imageheight: "320" # Images có sẵn là 240x320
+  displaymodel: "ili9341"
+  invertcolors: "true" 
+  loading_illustration_file: https://github.com/RealDeco/xiaozhi-esphome/raw/main/images/${imagemodel}/${imagewidth}x${imageheight}/loading.png
+  idle_illustration_file: https://github.com/RealDeco/xiaozhi-esphome/raw/main/images/${imagemodel}/${imagewidth}x${imageheight}/idle.png
+  listening_illustration_file: https://github.com/RealDeco/xiaozhi-esphome/raw/main/images/${imagemodel}/${imagewidth}x${imageheight}/listening.png
+  thinking_illustration_file: https://github.com/RealDeco/xiaozhi-esphome/raw/main/images/${imagemodel}/${imagewidth}x${imageheight}/thinking.png
+  replying_illustration_file: https://github.com/RealDeco/xiaozhi-esphome/raw/main/images/${imagemodel}/${imagewidth}x${imageheight}/replying.png
+  error_illustration_file: https://github.com/RealDeco/xiaozhi-esphome/raw/main/images/${imagemodel}/${imagewidth}x${imageheight}/error.png
+  timer_finished_illustration_file: https://github.com/RealDeco/xiaozhi-esphome/raw/main/images/${imagemodel}/${imagewidth}x${imageheight}/timer_finished.png
+  mute_illustration_file: https://github.com/RealDeco/xiaozhi-esphome/raw/main/images/Mute/${imagewidth}x${imageheight}/mute.png
+  loading_illustration_background_color: "000000"
+  idle_illustration_background_color: "000000"
+  listening_illustration_background_color: "000000"
+  thinking_illustration_background_color: "000000"
+  replying_illustration_background_color: "000000"
+  error_illustration_background_color: "000000"
+  allowed_characters: "aàáảãạăằắẳẵặâầấẩẫậbcdđeèéẻẽẹêềếểễệghiìíỉĩịklmnoòóỏõọôồốổỗộơờớởỡợpqrstuùúủũụưừứửữựvxyỳýỷỹỵAÀÁẢÃẠĂẰẮẲẴẶÂẦẤẨẪẬBCDĐEÈÉẺẼẸÊỀẾỂỄỆGHIÌÍỈĨỊKLMNOÒÓỎÕỌÔỒỐỔỖỘƠỜỚỞỠỢPQRSTUÙÚỦŨỤƯỪỨỬỮỰVXYỲÝỶỸỴ0123456789 !,.?-+%&*@#$()/\\:;<>[]{}| "
+  font_family: "Noto Sans"
+  wake_word_triggered_sound_file: start.wav
+  end_sound_file: end.flac
+  voice_assist_idle_phase_id: "1"
+  voice_assist_listening_phase_id: "2"
+  voice_assist_thinking_phase_id: "3"
+  voice_assist_replying_phase_id: "4"
+  voice_assist_not_ready_phase_id: "10"
+  voice_assist_error_phase_id: "11"
+  voice_assist_muted_phase_id: "12"
+  voice_assist_timer_finished_phase_id: "20"
+
+esphome:
+  name: ${name}
+  friendly_name: ${friendly_name}
+  min_version: 2025.5.0
+  name_add_mac_suffix: false
+  on_boot:
+    priority: 600
+    then:
+      - light.turn_on: Sled
+      # Wake up ES8311: Toggle PA pin để initialize codec
+      - output.turn_off: pa_enable   # Tắt trước
+      - delay: 50ms
+      - output.turn_on: pa_enable    # Bật lại để wake up ES8311
+      - delay: 100ms  # Delay để PA và ES8311 ổn định
+      - script.execute: draw_display
+      - delay: 30s
+      - if:
+          condition:
+            lambda: return id(init_in_progress);
+          then:
+            - lambda: id(init_in_progress) = false;
+            - script.execute: draw_display
+            - switch.turn_off: mute
+
+esp32:
+  board: esp32-s3-devkitc-1
+  flash_size: 16MB
+  cpu_frequency: 240MHz
+  framework:
+    type: esp-idf
+    sdkconfig_options:
+      CONFIG_ESP32S3_DEFAULT_CPU_FREQ_240: "y"
+      CONFIG_ESP32S3_DATA_CACHE_64KB: "y"
+      CONFIG_ESP32S3_DATA_CACHE_LINE_64B: "y"
+
+psram:
+  mode: octal
+  speed: 80MHz
+
+
+api:
+  on_client_connected:
+    - script.execute: draw_display
+    - lambda: |-
+        if (!id(boot_sound_played)) {
+          id(boot_sound_played) = true;
+          if (id(startup_sound_switch).state) {
+            id(play_sound)->execute(true, id(wake_word_triggered_sound));
+          }
+        }
+  on_client_disconnected:
+    - script.execute: draw_display
+ota:
+  - platform: esphome
+    id: ota_esphome
+
+logger:
+
+wifi:
+  ssid: Black
+  password: 0964343466
+  output_power: 8.5dB
+  ap:
+    ssid: "ESP32S3 Assistant"
+    password: "11223344"
+  on_connect:
+    - script.execute: draw_display
+  on_disconnect:
+    - script.execute: draw_display
+captive_portal:
+
+button:
+  - platform: factory_reset
+    id: factory_reset_btn
+    internal: true
+  - platform: template
+    name: "Test Speaker"
+    icon: "mdi:volume-high"
+    id: test_speaker_btn
+    on_press:
+      - script.execute:
+          id: play_sound
+          priority: true
+          sound_file: !lambda return id(wake_word_triggered_sound);
+      - delay: 1s
+      - script.execute:
+          id: play_sound
+          priority: true
+          sound_file: !lambda return id(end_sound);
+
+binary_sensor:
+  - platform: gpio
+    pin:
+      number: 0
+      mode: INPUT_PULLUP
+      ignore_strapping_warning: true
+      inverted: true
+    id: left_top_button
+    internal: true
+    on_multi_click:
+      - timing:
+          - ON for at least 50ms
+          - OFF for at least 50ms
+        then:
+          - if:
+              condition:
+                switch.is_on: timer_ringing
+              then:
+                - switch.turn_off: timer_ringing
+              else:
+                - if:
+                    condition:
+                      not:
+                        voice_assistant.is_running:
+                    then:
+                      - voice_assistant.start:                     
+                    else:
+                      - voice_assistant.stop:                     
+      - timing:
+          - ON for at least 10s
+        then:
+          - button.press: factory_reset_btn
+
+output:
+  - platform: ledc
+    id: backlight_output
+    pin:
+      number: 45
+  # PA enable cho ES8311 (AUDIO_CODEC_PA_PIN = GPIO1)
+  - platform: gpio
+    id: pa_enable
+    pin: GPIO1
+
+light:
+  - platform: monochromatic
+    id: Sled
+    name: Screen
+    icon: "mdi:television"
+    entity_category: config
+    output: backlight_output
+    restore_mode: RESTORE_DEFAULT_ON
+    default_transition_length: 250ms
+  - platform: esp32_rmt_led_strip
+    id: led
+    name: none
+    disabled_by_default: false
+    entity_category: config
+    pin: GPIO48
+    default_transition_length: 0s
+    chipset: WS2812
+    num_leds: 1
+    rgb_order: grb
+    effects:
+      - pulse:
+          name: "Slow Pulse"
+          transition_length: 250ms
+          update_interval: 250ms
+          min_brightness: 50%
+          max_brightness: 100%
+      - pulse:
+          name: "Fast Pulse"
+          transition_length: 100ms
+          update_interval: 100ms
+          min_brightness: 50%
+          max_brightness: 100%
+
+i2c:
+  - id: bus_a
+    sda: 16
+    scl: 15
+    scan: true
+
+audio_dac:
+  - platform: es8311
+    id: es8311_dac
+    i2c_id: bus_a
+    bits_per_sample: 16bit
+    sample_rate: 16000
+    use_mclk: true
+
+i2s_audio:
+  # Pin map theo `nice-esp32s3/config.h`
+  - id: i2s_audio_bus
+    i2s_lrclk_pin: GPIO7 # WS (LRC) - Dành cho SPEAKER
+    i2s_bclk_pin: GPIO5  # BCLK (SCK)
+    i2s_mclk_pin: GPIO4  # MCLK (Master Clock)
+  # TEST: I2S bus riêng cho mic (giả) để tránh conflict với speaker
+  - id: i2s_mic_bus
+    i2s_lrclk_pin: GPIO14  # Pin giả cho mic (không conflict)
+    i2s_bclk_pin: GPIO19   # Pin giả cho mic (không conflict)
+
+microphone:
+  - platform: i2s_audio
+    i2s_audio_id: i2s_mic_bus  # Dùng I2S bus riêng
+    adc_type: external
+    i2s_din_pin: GPIO6 # DIN (ES8311 microphone input)
+    id: i2s_mics
+    channel: left
+    pdm: false
+    bits_per_sample: 16bit
+    sample_rate: 16000  # micro_wake_word yêu cầu 16000
+
+speaker:
+  - platform: i2s_audio
+    id: i2s_audio_speaker
+    i2s_audio_id: i2s_audio_bus
+    dac_type: external
+    i2s_dout_pin:   
+      number: GPIO8 # DOUT (ES8311 speaker output)
+    channel: left
+    buffer_duration: 1000ms
+    sample_rate: 16000
+    bits_per_sample: 16bit
+    audio_dac: es8311_dac
+
+media_player:
+  - platform: speaker
+    name: None
+    id: external_media_player
+    announcement_pipeline:
+      speaker: i2s_audio_speaker
+      format: FLAC
+      # ES8311 trong project này chạy 16kHz (khớp micro_wake_word/AFE),
+      # nên ép pipeline về 16k để tránh “có start nhưng không ra tiếng”.
+      sample_rate: 16000
+      num_channels: 1 
+    files:
+      - id: timer_finished_sound
+        file: ${end_sound_file}
+      - id: wake_word_triggered_sound
+        file: ${wake_word_triggered_sound_file}
+      - id: end_sound
+        file: ${end_sound_file}
+    on_play:
+      # BẤT KỲ phát nào (TTS, nhạc từ HA, v.v.) → bật PA TRƯỚC khi speaker start
+      - script.execute: audio_mode_reply
+
+    on_announcement:
+      # Replying/announcing: tắt mic + tắt wakeword + bật loa
+      - script.execute: audio_mode_reply
+      - if:
+          condition:
+            - switch.is_on: use_listen_light
+          then:
+            - light.turn_on:
+                id: led
+                blue: 100%
+                red: 0%
+                green: 0%
+                brightness: 100%
+                effect: none
+      - if:
+          condition:
+            not:
+              voice_assistant.is_running:
+          then:
+
+    on_idle:
+      - script.execute: reset_led
+      # Idle: CHỈ tắt PA nếu speaker thực sự không phát
+      # QUAN TRỌNG: Đảm bảo speaker đã thực sự dừng (không phải chỉ state change)
+      - wait_until:
+          condition:
+            - not:
+                speaker.is_playing:
+          timeout: 100ms
+      # CHỈ tắt PA nếu không có audio đang phát (để phát nhạc từ HA ở idle vẫn được)
+      - if:
+          condition:
+            - not:
+                speaker.is_playing:
+            - not:
+                media_player.is_playing:
+          then:
+            - script.execute: audio_mode_listen
+      - if:
+          condition:
+            not:
+              voice_assistant.is_running:
+          then:
+            - script.execute: start_wake_word
+            - script.execute: set_idle_or_mute_phase
+            - script.execute: draw_display
+
+micro_wake_word:
+  id: mww
+  models:
+    - okay_nabu
+    - hey_jarvis
+    - alexa
+  on_wake_word_detected:
+    - lambda: id(wake_word_just_triggered) = true;
+    - if:
+        condition:
+          switch.is_on: wake_sound
+        then:
+          - script.execute:
+              id: play_sound
+              priority: true
+              sound_file: !lambda return id(wake_word_triggered_sound);
+          - delay: 300ms
+    - voice_assistant.start:
+        wake_word: !lambda return wake_word;
+
+voice_assistant:
+  id: va
+  microphone: i2s_mics
+  media_player: external_media_player
+  micro_wake_word: mww
+  noise_suppression_level: 2
+  auto_gain: 31dBFS
+  volume_multiplier: 2.0
+  on_listening:
+    # Listening: tắt loa (PA off) + bật mic + bật wakeword (nếu cần)
+    - script.execute: audio_mode_listen
+    # IMPORTANT: Không play beep ở đây vì lúc này microphone đã capture (I2S đang bận),
+    # sẽ gây lỗi "Parent I2S bus not free" khi speaker cố start.
+    # Beep đã được phát trong `micro_wake_word.on_wake_word_detected` (trước khi start VA).
+    - lambda: id(wake_word_just_triggered) = false;  # Reset flag
+    - if:
+        condition:
+          - switch.is_on: use_listen_light
+        then:
+          - light.turn_on:
+              id: led
+              blue: 100%
+              red: 0%
+              green: 0%
+              effect: "Slow Pulse"
+    - lambda: id(voice_assistant_phase) = ${voice_assist_listening_phase_id};
+    - text_sensor.template.publish:
+        id: text_request
+        state: "..."
+    - text_sensor.template.publish:
+        id: text_response
+        state: "..."
+    - script.execute: draw_display
+  on_stt_vad_end:
+    - if:
+        condition:
+          - switch.is_on: use_listen_light
+        then:
+          - light.turn_on:
+              id: led
+              blue: 100%
+              red: 0%
+              green: 0%
+              effect: "Fast Pulse"
+    - lambda: id(voice_assistant_phase) = ${voice_assist_thinking_phase_id};
+    - microphone.mute: 
+    - script.execute: draw_display
+  on_stt_end:
+    - text_sensor.template.publish:
+        id: text_request
+        state: !lambda return x; 
+    - script.execute: draw_display        
+  on_tts_start:
+    # Replying: tắt mic + tắt wakeword + bật loa
+    - script.execute: audio_mode_reply
+    - if:
+        condition:
+          - switch.is_on: use_listen_light
+        then:
+          - light.turn_on:
+              id: led
+              blue: 100%
+              red: 0%
+              green: 0%
+              brightness: 100%
+              effect: none
+    - text_sensor.template.publish:
+        id: text_response
+        state: !lambda return x;
+    - lambda: id(voice_assistant_phase) = ${voice_assist_replying_phase_id};
+    - script.execute: draw_display
+    
+  on_end:
+    - microphone.unmute:
+    - lambda: id(wake_word_just_triggered) = false;
+    - wait_until:
+        condition:
+          - media_player.is_announcing
+        timeout: 0.5s
+    - wait_until:
+        - and:
+            - not:
+                media_player.is_announcing
+            - not:
+                speaker.is_playing
+    - if:
+        condition:
+          switch.is_on: stop_continue_conversation
+        then:
+          - if:
+              condition:
+                voice_assistant.is_running
+              then:
+                - voice_assistant.stop
+          - if:
+              condition:
+                lambda: return id(wake_word_engine_location).state == "On device";
+              then:
+                - micro_wake_word.start
+              else:
+                - lambda: id(va).set_use_wake_word(true);
+                - voice_assistant.start_continuous:
+    - if:
+        condition:
+          lambda: return id(wake_word_engine_location).state == "On device";
+        then:
+          - lambda: id(va).set_use_wake_word(false);
+          - micro_wake_word.start:
+    # Quay về listening (idle): tắt loa + bật mic + bật wakeword
+    - script.execute: audio_mode_listen
+    - script.execute: set_idle_or_mute_phase
+    - script.execute: draw_display
+    - text_sensor.template.publish:
+        id: text_request
+        state: ""
+    - text_sensor.template.publish:
+        id: text_response
+        state: ""
+    - script.execute: reset_led
+    - delay: 500ms
+    - if:
+        condition:
+          and:
+            - not:
+                voice_assistant.is_running:
+            - switch.is_on: sw_end_sound
+        then:
+          - script.execute:
+              id: play_sound
+              priority: true
+              sound_file: !lambda return id(end_sound);
+
+  on_error:
+    - if:
+        condition:
+          lambda: return !id(init_in_progress);
+        then:
+          - lambda: id(voice_assistant_phase) = ${voice_assist_error_phase_id};
+          - script.execute: draw_display
+          - delay: 1s
+          - if:
+              condition:
+                switch.is_off: mute
+              then:
+                - lambda: id(voice_assistant_phase) = ${voice_assist_idle_phase_id};
+              else:
+                - lambda: id(voice_assistant_phase) = ${voice_assist_muted_phase_id};
+          - script.execute: draw_display
+    - if:
+        condition:
+          - switch.is_on: use_listen_light
+        then:
+          - light.turn_on:
+              id: led
+              red: 100%
+              green: 0%
+              blue: 0%
+              brightness: 100%
+              effect: none
+    - delay: 2s
+    - script.execute: reset_led
+  on_client_connected:
+    - lambda: id(init_in_progress) = false;
+    - script.execute: start_wake_word
+    - script.execute: set_idle_or_mute_phase
+    - script.execute: draw_display
+  on_client_disconnected:
+    - script.execute: stop_wake_word
+    - lambda: id(voice_assistant_phase) = ${voice_assist_not_ready_phase_id};
+    - script.execute: draw_display
+  on_timer_started:
+    - script.execute: draw_display
+  on_timer_cancelled:
+    - script.execute: draw_display
+  on_timer_updated:
+    - script.execute: draw_display
+  on_timer_tick:
+    - script.execute: draw_display
+  on_timer_finished:
+    - switch.turn_on: timer_ringing
+    - if:
+        condition:
+          - switch.is_on: use_listen_light
+        then:
+          - light.turn_on:
+              id: led
+              red: 0%
+              green: 100%
+              blue: 0%
+              brightness: 100%
+              effect: "Fast Pulse"
+    - wait_until:
+        media_player.is_announcing:
+    - lambda: id(voice_assistant_phase) = ${voice_assist_timer_finished_phase_id};
+    - script.execute: draw_display
+    - light.turn_off: led
+
+script:
+  # ===== Audio state machine (theo yêu cầu) =====
+  - id: audio_mode_reply
+    then:
+      # Replying: tắt wakeword + tắt mic để nhả I2S cho speaker
+      - micro_wake_word.stop:
+      - microphone.mute:
+      # Wake up ES8311: Toggle PA để đảm bảo codec hoạt động
+      - output.turn_off: pa_enable   # Tắt trước
+      - delay: 10ms
+      - output.turn_on: pa_enable    # Bật lại
+      - delay: 100ms  # Delay để PA và ES8311 ổn định trước khi speaker start
+
+  - id: audio_mode_listen
+    then:
+      # Listening: CHỈ tắt PA khi thực sự cần dùng mic (listening mode)
+      # KHÔNG tắt PA ở idle để vẫn phát được nhạc từ HA
+      - microphone.unmute:
+      - if:
+          condition:
+            lambda: return id(wake_word_engine_location).state == "On device";
+          then:
+            - micro_wake_word.start:
+            # CHỈ tắt PA khi thực sự listening (có wake word)
+            - output.turn_off: pa_enable
+
+  - id: reset_led
+    then:
+      - if:
+          condition:
+            - lambda: return id(wake_word_engine_location).state == "On device";
+            - switch.is_on: use_listen_light
+          then:
+            - light.turn_on:
+                id: led
+                red: 100%
+                green: 89%
+                blue: 71%
+                brightness: 30%
+                effect: none
+          else:
+            - if:
+                condition:
+                  - lambda: return id(wake_word_engine_location).state != "On device";
+                  - switch.is_on: use_listen_light
+                then:
+                  - light.turn_on:
+                      id: led
+                      red: 0%
+                      green: 100%
+                      blue: 100%
+                      brightness: 30%
+                      effect: none
+                else:
+                  - light.turn_off: led
+  - id: draw_display
+    then:
+      - if:
+          condition:
+            lambda: return !id(init_in_progress);
+          then:
+            - if:
+                condition:
+                  wifi.connected:
+                then:
+                  - if:
+                      condition:
+                        api.connected:
+                      then:
+                        - lambda: |
+                            switch(id(voice_assistant_phase)) {
+                              case ${voice_assist_listening_phase_id}:
+                                id(s3_box_lcd).show_page(listening_page);
+                                id(s3_box_lcd).update();
+                                break;
+                              case ${voice_assist_thinking_phase_id}:
+                                id(s3_box_lcd).show_page(thinking_page);
+                                id(s3_box_lcd).update();
+                                break;
+                              case ${voice_assist_replying_phase_id}:
+                                id(s3_box_lcd).show_page(replying_page);
+                                id(s3_box_lcd).update();
+                                break;
+                              case ${voice_assist_error_phase_id}:
+                                id(s3_box_lcd).show_page(error_page);
+                                id(s3_box_lcd).update();
+                                break;
+                              case ${voice_assist_muted_phase_id}:
+                                id(s3_box_lcd).show_page(muted_page);
+                                id(s3_box_lcd).update();
+                                break;
+                              case ${voice_assist_not_ready_phase_id}:
+                                id(s3_box_lcd).show_page(no_ha_page);
+                                id(s3_box_lcd).update();
+                                break;
+                              case ${voice_assist_timer_finished_phase_id}:
+                                id(s3_box_lcd).show_page(timer_finished_page);
+                                id(s3_box_lcd).update();
+                                break;
+                              default:
+                                id(s3_box_lcd).show_page(idle_page);
+                                id(s3_box_lcd).update();
+                            }
+                      else:
+                        - display.page.show: no_ha_page
+                        - component.update: s3_box_lcd
+                else:
+                  - display.page.show: no_wifi_page
+                  - component.update: s3_box_lcd
+          else:
+            - display.page.show: initializing_page
+            - component.update: s3_box_lcd
+
+
+  - id: fetch_first_active_timer
+    then:
+      - lambda: |
+          const auto timers = id(va).get_timers();
+          auto output_timer = timers.begin()->second;
+          for (auto &iterable_timer : timers) {
+            if (iterable_timer.second.is_active && iterable_timer.second.seconds_left <= output_timer.seconds_left) {
+              output_timer = iterable_timer.second;
+            }
+          }
+          id(global_first_active_timer) = output_timer;
+  - id: check_if_timers_active
+    then:
+      - lambda: |
+          const auto timers = id(va).get_timers();
+          bool output = false;
+          if (timers.size() > 0) {
+            for (auto &iterable_timer : timers) {
+              if(iterable_timer.second.is_active) {
+                output = true;
+              }
+            }
+          }
+          id(global_is_timer_active) = output;
+  - id: fetch_first_timer
+    then:
+      - lambda: |
+          const auto timers = id(va).get_timers();
+          auto output_timer = timers.begin()->second;
+          for (auto &iterable_timer : timers) {
+            if (iterable_timer.second.seconds_left <= output_timer.seconds_left) {
+              output_timer = iterable_timer.second;
+            }
+          }
+          id(global_first_timer) = output_timer;
+  - id: check_if_timers
+    then:
+      - lambda: |
+          const auto timers = id(va).get_timers();
+          bool output = false;
+          if (timers.size() > 0) {
+            output = true;
+          }
+          id(global_is_timer) = output;
+  - id: draw_timer_timeline
+    then:
+      - lambda: |
+          id(check_if_timers_active).execute();
+          id(check_if_timers).execute();
+          if (id(global_is_timer_active)){
+            id(fetch_first_active_timer).execute();
+            int active_pixels = round( 240 * id(global_first_active_timer).seconds_left / max(id(global_first_active_timer).total_seconds , static_cast<uint32_t>(1)) );
+            if (active_pixels > 0){
+              id(s3_box_lcd).filled_rectangle(0 , 225 , 240 , 15 , Color::WHITE );
+              id(s3_box_lcd).filled_rectangle(0 , 226 , active_pixels , 13 , id(active_timer_color) );
+            }
+          } else if (id(global_is_timer)){
+            id(fetch_first_timer).execute();
+            int active_pixels = round( 240 * id(global_first_timer).seconds_left / max(id(global_first_timer).total_seconds , static_cast<uint32_t>(1)));
+            if (active_pixels > 0){
+              id(s3_box_lcd).filled_rectangle(0 , 225 , 240 , 15 , Color::WHITE );
+              id(s3_box_lcd).filled_rectangle(0 , 226 , active_pixels , 13 , id(paused_timer_color) );
+            }
+          }
+  - id: draw_active_timer_widget
+    then:
+      - lambda: |
+          id(check_if_timers_active).execute();
+          if (id(global_is_timer_active)){
+            id(s3_box_lcd).filled_rectangle(80 , 40 , 160 , 50 , Color::WHITE );
+            id(s3_box_lcd).rectangle(80 , 40 , 160 , 50 , Color::BLACK );
+
+            id(fetch_first_active_timer).execute();
+            int hours_left = floor(id(global_first_active_timer).seconds_left / 3600);
+            int minutes_left = floor((id(global_first_active_timer).seconds_left - hours_left * 3600) / 60);
+            int seconds_left = id(global_first_active_timer).seconds_left - hours_left * 3600 - minutes_left * 60 ;
+            auto display_hours = (hours_left < 10 ? "0" : "") + std::to_string(hours_left);
+            auto display_minute = (minutes_left < 10 ? "0" : "") + std::to_string(minutes_left);
+            auto display_seconds = (seconds_left  < 10 ? "0" : "") + std::to_string(seconds_left) ;
+
+            std::string display_string = "";
+            if (hours_left > 0) {
+              display_string = display_hours + ":" + display_minute;
+            } else {
+              display_string = display_minute + ":" + display_seconds;
+            }
+            id(s3_box_lcd).printf(120, 47, id(font_timer), Color::BLACK, "%s", display_string.c_str());
+          }
+  - id: start_wake_word
+    then:
+      - if:
+          condition:
+            and:
+              - not:
+                  - voice_assistant.is_running:
+              - lambda: return id(wake_word_engine_location).state == "On device";
+          then:
+            - lambda: id(va).set_use_wake_word(false);
+            - micro_wake_word.start:
+      - if:
+          condition:
+            and:
+              - not:
+                  - voice_assistant.is_running:
+              - lambda: return id(wake_word_engine_location).state == "In Home Assistant";
+          then:
+            - lambda: id(va).set_use_wake_word(true);
+            - voice_assistant.start_continuous:
+  - id: stop_wake_word
+    then:
+      - if:
+          condition:
+            lambda: return id(wake_word_engine_location).state == "In Home Assistant";
+          then:
+            - lambda: id(va).set_use_wake_word(false);
+            - voice_assistant.stop:
+      - if:
+          condition:
+            lambda: return id(wake_word_engine_location).state == "On device";
+          then:
+            - micro_wake_word.stop:
+  - id: set_idle_or_mute_phase
+    then:
+      - if:
+          condition:
+            switch.is_off: mute
+          then:
+            - lambda: id(voice_assistant_phase) = ${voice_assist_idle_phase_id};
+          else:
+            - lambda: id(voice_assistant_phase) = ${voice_assist_muted_phase_id};
+  - id: play_sound
+    parameters:
+      priority: bool
+      sound_file: "audio::AudioFile*"
+    then:
+      # Play sound là announcing → đảm bảo đang ở mode reply
+      - script.execute: audio_mode_reply
+      - lambda: |-
+          if (priority) {
+            id(external_media_player)
+              ->make_call()
+              .set_command(media_player::MediaPlayerCommand::MEDIA_PLAYER_COMMAND_STOP)
+              .set_announcement(true)
+              .perform();
+          }
+          if ( (id(external_media_player).state != media_player::MediaPlayerState::MEDIA_PLAYER_STATE_ANNOUNCING ) || priority) {
+            id(external_media_player)
+              ->play_file(sound_file, true, false);
+          }
+      # Sau khi phát xong, on_idle của media_player sẽ gọi audio_mode_listen
+
+switch:
+  - platform: template
+    name: Use listen light
+    id: use_listen_light
+    optimistic: true
+    restore_mode: RESTORE_DEFAULT_ON
+    entity_category: config
+    on_turn_on:
+      - script.execute: reset_led
+    on_turn_off:
+      - script.execute: reset_led
+  - platform: template
+    name: Mute
+    id: mute
+    icon: "mdi:microphone-off"
+    optimistic: true
+    restore_mode: RESTORE_DEFAULT_OFF
+    entity_category: config
+    on_turn_off:
+      - microphone.unmute:
+      - lambda: id(voice_assistant_phase) = ${voice_assist_idle_phase_id};
+      - script.execute: draw_display
+    on_turn_on:
+      - microphone.mute:
+      - lambda: id(voice_assistant_phase) = ${voice_assist_muted_phase_id};
+      - script.execute: draw_display
+  - platform: template
+    id: timer_ringing
+    optimistic: true
+    internal: true
+    restore_mode: ALWAYS_OFF
+    on_turn_off:
+      - lambda: |-
+              id(external_media_player)
+                ->make_call()
+                .set_command(media_player::MediaPlayerCommand::MEDIA_PLAYER_COMMAND_REPEAT_OFF)
+                .set_announcement(true)
+                .perform();
+              id(external_media_player)->set_playlist_delay_ms(speaker::AudioPipelineType::ANNOUNCEMENT, 0);
+      - media_player.stop:
+          announcement: true
+    on_turn_on:
+      - lambda: |-
+            id(external_media_player)
+              ->make_call()
+              .set_command(media_player::MediaPlayerCommand::MEDIA_PLAYER_COMMAND_REPEAT_ONE)
+              .set_announcement(true)
+              .perform();
+            id(external_media_player)->set_playlist_delay_ms(speaker::AudioPipelineType::ANNOUNCEMENT, 1000);
+      - media_player.speaker.play_on_device_media_file:
+          media_file: timer_finished_sound
+          announcement: true
+      - delay: 15min
+      - switch.turn_off: timer_ringing
+  - platform: template
+    id: wake_sound
+    name: Wake sound
+    icon: "mdi:bullhorn"
+    entity_category: config
+    optimistic: true
+    restore_mode: RESTORE_DEFAULT_ON
+  - platform: template
+    id: sw_end_sound
+    name: End sound
+    icon: "mdi:bullhorn"
+    entity_category: config
+    optimistic: true
+    restore_mode: RESTORE_DEFAULT_ON
+  - platform: template
+    id: stop_continue_conversation
+    name: "Stop Continue Conversation"
+    icon: "mdi:restart-alert"
+    optimistic: true
+    restore_mode: RESTORE_DEFAULT_OFF
+
+  - platform: template
+    id: startup_sound_switch
+    name: Startup sound
+    icon: "mdi:card-text-outline"
+    entity_category: config
+    optimistic: true
+    restore_mode: RESTORE_DEFAULT_ON
+
+  - platform: template
+    id: show_text
+    name: Show Text
+    icon: "mdi:card-text-outline"
+    entity_category: config
+    optimistic: true
+    restore_mode: RESTORE_DEFAULT_ON
+
+select:
+  - platform: template
+    entity_category: config
+    name: Wake word engine location
+    id: wake_word_engine_location
+    icon: "mdi:account-voice"
+    optimistic: true
+    restore_value: true
+    options:
+      - In Home Assistant
+      - On device
+    initial_option: On device
+    on_value:
+      - if:
+          condition:
+            lambda: return !id(init_in_progress);
+          then:
+            - wait_until:
+                lambda: return id(voice_assistant_phase) == ${voice_assist_muted_phase_id} || id(voice_assistant_phase) == ${voice_assist_idle_phase_id};
+            - if:
+                condition:
+                  lambda: return x == "In Home Assistant";
+                then:
+                  - micro_wake_word.stop
+                  - delay: 500ms
+                  - if:
+                      condition:
+                        switch.is_off: mute
+                      then:
+                        - lambda: id(va).set_use_wake_word(true);
+                        - voice_assistant.start_continuous:
+            - if:
+                condition:
+                  lambda: return x == "On device";
+                then:
+                  - lambda: id(va).set_use_wake_word(false);
+                  - voice_assistant.stop
+                  - delay: 500ms
+                  - if:
+                      condition:
+                        switch.is_off: mute
+                      then:
+                        - micro_wake_word.start
+
+globals:
+  - id: text_request_offset
+    type: int
+    restore_value: false
+    initial_value: "0"
+  - id: text_response_offset
+    type: int
+    restore_value: false
+    initial_value: "0"
+  - id: wake_word_just_triggered
+    type: bool
+    restore_value: false
+    initial_value: "false"
+  - id: init_in_progress
+    type: bool
+    restore_value: false
+    initial_value: "true"
+  - id: voice_assistant_phase
+    type: int
+    restore_value: false
+    initial_value: ${voice_assist_not_ready_phase_id}
+  - id: global_first_active_timer
+    type: voice_assistant::Timer
+    restore_value: false
+  - id: global_is_timer_active
+    type: bool
+    restore_value: false
+  - id: global_first_timer
+    type: voice_assistant::Timer
+    restore_value: false
+  - id: global_is_timer
+    type: bool
+    restore_value: false
+  - id: boot_sound_played
+    type: bool
+    restore_value: no
+    initial_value: "false"
+
+image:
+  - file: ${error_illustration_file}
+    id: casita_error
+    resize: ${imagewidth}x${imageheight}
+    type: RGB
+    transparency: alpha_channel
+  - file: ${idle_illustration_file}
+    id: casita_idle
+    resize: ${imagewidth}x${imageheight}
+    type: RGB
+    transparency: alpha_channel
+  - file: ${listening_illustration_file}
+    id: casita_listening
+    resize: ${imagewidth}x${imageheight}
+    type: RGB
+    transparency: alpha_channel
+  - file: ${thinking_illustration_file}
+    id: casita_thinking
+    resize: ${imagewidth}x${imageheight}
+    type: RGB
+    transparency: alpha_channel
+  - file: ${replying_illustration_file}
+    id: casita_replying
+    resize: ${imagewidth}x${imageheight}
+    type: RGB
+    transparency: alpha_channel
+  - file: ${timer_finished_illustration_file}
+    id: casita_timer_finished
+    resize: ${imagewidth}x${imageheight}
+    type: RGB
+    transparency: alpha_channel
+  - file: ${loading_illustration_file}
+    id: casita_initializing
+    resize: ${imagewidth}x${imageheight}
+    type: RGB
+    transparency: alpha_channel
+  - file: ${mute_illustration_file}
+    id: casita_muted
+    resize: ${imagewidth}x${imageheight}
+    type: RGB
+    transparency: alpha_channel
+  - file: https://github.com/esphome/wake-word-voice-assistants/raw/main/error_box_illustrations/error-no-wifi.png
+    id: error_no_wifi
+    resize: ${imagewidth}x${imageheight}
+    type: RGB
+    transparency: alpha_channel
+  - file: https://github.com/esphome/wake-word-voice-assistants/raw/main/error_box_illustrations/error-no-ha.png
+    id: error_no_ha
+    resize: ${imagewidth}x${imageheight}
+    type: RGB
+    transparency: alpha_channel
+
+font:
+  - file:
+      type: gfonts
+      family: Noto Sans
+      weight: 300
+      italic: true
+    id: font_request
+    size: 10
+    glyphsets:
+      - GF_Latin_Kernel
+      - GF_Latin_Vietnamese
+  - file:
+      type: gfonts
+      family: Noto Sans
+      weight: 300
+    id: font_response
+    size: 10
+    glyphsets:
+      - GF_Latin_Kernel
+      - GF_Latin_Vietnamese
+  - file:
+      type: gfonts
+      family: Noto Sans
+      weight: 300
+    id: font_timer
+    size: 30
+    glyphsets:
+      - GF_Latin_Kernel
+      - GF_Latin_Vietnamese
+
+text_sensor:
+  - id: text_request
+    platform: template
+    icon: mdi:ear-hearing
+    name: "Request"
+    entity_category: diagnostic 
+    on_value:
+      lambda: |-
+        if(id(text_request).state.length() > 500) {
+          std::string name = id(text_request).state.c_str();
+          std::string truncated = esphome::str_truncate(name.c_str(), 499);
+          id(text_request).state = (truncated + "...").c_str();
+        }
+        std::string request = id(text_request).state.c_str();
+        if (request.find("không cần") != std::string::npos ||
+            request.find("Không cần") != std::string::npos ||
+            request.find("cảm ơn") != std::string::npos ||
+            request.find("Cảm ơn") != std::string::npos ||
+            request.find("dừng lại") != std::string::npos ||
+            request.find("Dừng lại") != std::string::npos ||
+            request.find("stop") != std::string::npos ||
+            request.find("Stop") != std::string::npos ||
+            request.find("Phẩy") != std::string::npos ||
+            request.find("phẩy") != std::string::npos) {
+          id(va)->request_stop();
+        }
+  - id: text_response
+    platform: template
+    icon: mdi:react
+    name: "Response"
+    entity_category: diagnostic
+    on_value:
+      lambda: |-
+        if(id(text_response).state.length()>500) {
+          std::string name = id(text_response).state.c_str();
+          std::string truncated = esphome::str_truncate(name.c_str(),499);
+          id(text_response).state = (truncated+"...").c_str();
+        }	
+
+color:
+  - id: idle_color
+    hex: ${idle_illustration_background_color}
+  - id: listening_color
+    hex: ${listening_illustration_background_color}
+  - id: thinking_color
+    hex: ${thinking_illustration_background_color}
+  - id: replying_color
+    hex: ${replying_illustration_background_color}
+  - id: loading_color
+    hex: ${loading_illustration_background_color}
+  - id: error_color
+    hex: ${error_illustration_background_color}
+  - id: active_timer_color
+    hex: "26ed3a"
+  - id: paused_timer_color
+    hex: "3b89e3"
+
+spi:
+  - id: spi_bus
+    clk_pin: 12
+    mosi_pin: 11
+
+display:
+  - platform: ili9xxx
+    id: s3_box_lcd
+    model: ${displaymodel}
+    invert_colors: ${invertcolors}
+    data_rate: 20MHz
+    cs_pin: 10
+    dc_pin: 46
+    update_interval: never
+    dimensions:
+        height: 320  # Sau khi swap_xy=true từ base config → 240x320
+        width: 240
+    transform:
+      # Base config: swap_xy=true, mirror_x=false, mirror_y=false (rotation=0)
+      # Rotation=1 (90°): swap_xy=false, mirror_x=true, mirror_y=false
+      # → Kết quả: 240x320 với mirror_x
+      swap_xy: false  # Từ base swap_xy=true → false
+      mirror_x: true  # Từ base mirror_x=false → true
+      mirror_y: false
+
+    pages:
+      - id: idle_page
+        lambda: |-
+          it.fill(id(idle_color));
+          it.image((it.get_width() / 2), (it.get_height() / 2), id(casita_idle), ImageAlign::CENTER);
+          id(draw_timer_timeline).execute();
+          id(draw_active_timer_widget).execute();
+      - id: listening_page
+        lambda: |-
+          it.fill(id(listening_color));
+          it.image((it.get_width() / 2), (it.get_height() / 2), id(casita_listening), ImageAlign::CENTER);
+          id(draw_timer_timeline).execute();
+      - id: thinking_page
+        lambda: |-
+          it.fill(Color::BLACK);
+          if (id(show_text).state) {
+            std::string req_text = id(text_request).state.c_str();
+            // Đếm số ký tự UTF-8
+            int char_count = 0;
+            for (size_t i = 0; i < req_text.length(); ++i) {
+              if ((unsigned char)req_text[i] < 0x80) {
+                char_count++;
+              } else if ((unsigned char)req_text[i] == 0xC3 && i + 1 < req_text.length() && ((unsigned char)req_text[i + 1] & 0xC0) == 0x80) {
+                char_count++;
+                ++i;
+              }
+            }
+            int req_width = char_count * 7;  // 7 pixel mỗi ký tự
+            int rect_width = 100;
+            int scroll_speed = 1;
+            int pause_frames = 5;
+            if (req_width > rect_width) {
+              id(text_request_offset) += scroll_speed;
+              if (id(text_request_offset) >= req_width - rect_width + pause_frames) {
+                id(text_request_offset) = -pause_frames;
+              }
+            } else {
+              id(text_request_offset) = 0;
+            }
+            it.filled_rectangle(14, 20, 100, 14, Color::BLACK);
+            it.rectangle(14, 20, 100, 14, Color::BLACK);
+            int x_pos = 14 - id(text_request_offset);
+            if (req_width <= rect_width) x_pos = 14 + (rect_width - req_width) / 2;
+            it.image((it.get_width() / 2), (it.get_height() / 2), id(casita_thinking), ImageAlign::CENTER);
+            it.printf(x_pos, 22, id(font_request), Color::WHITE, "%s", req_text.c_str());
+            ESP_LOGD("thinking_page", "req_text: %s, char_count: %d, req_width: %d, offset: %d", req_text.c_str(), char_count, req_width, id(text_request_offset));
+          } else {
+            it.image((it.get_width() / 2), (it.get_height() / 2), id(casita_thinking), ImageAlign::CENTER);
+          }
+          id(draw_timer_timeline).execute();
+      - id: replying_page
+        lambda: |-
+          it.fill(Color::BLACK);
+          if (id(show_text).state) {
+            std::string res_text = id(text_response).state.c_str();
+            // Đếm số ký tự UTF-8
+            int char_count = 0;
+            for (size_t i = 0; i < res_text.length(); ++i) {
+              if ((unsigned char)res_text[i] < 0x80) {
+                char_count++;
+              } else if ((unsigned char)res_text[i] == 0xC3 && i + 1 < res_text.length() && ((unsigned char)res_text[i + 1] & 0xC0) == 0x80) {
+                char_count++;
+                ++i;
+              }
+            }
+            int res_width = char_count * 7;  // 7 pixel mỗi ký tự
+            int rect_width = 100;
+            int scroll_speed = 5;
+            int pause_frames = 5;
+            if (res_width > rect_width) {
+              id(text_response_offset) += scroll_speed;
+              if (id(text_response_offset) >= res_width - rect_width + pause_frames) {
+                id(text_response_offset) = -pause_frames;
+              }
+            } else {
+              id(text_response_offset) = 0;
+            }
+            it.filled_rectangle(14, 50, 100, 14, Color::BLACK);
+            it.rectangle(14, 50, 100, 14, Color::BLACK);
+            int x_pos = 14 - id(text_response_offset);
+            if (res_width <= rect_width) x_pos = 14 + (rect_width - res_width) / 2;
+            it.image((it.get_width() / 2), (it.get_height() / 2), id(casita_replying), ImageAlign::CENTER);
+            it.printf(x_pos, 52, id(font_response), Color::WHITE, "%s", res_text.c_str());
+            ESP_LOGD("replying_page", "res_text: %s, char_count: %d, res_width: %d, offset: %d", res_text.c_str(), char_count, res_width, id(text_response_offset));
+          } else {
+            it.image((it.get_width() / 2), (it.get_height() / 2), id(casita_replying), ImageAlign::CENTER);
+          }
+          id(draw_timer_timeline).execute();
+      - id: timer_finished_page
+        lambda: |-
+          it.fill(id(idle_color));
+          it.image((it.get_width() / 2), (it.get_height() / 2), id(casita_timer_finished), ImageAlign::CENTER);
+      - id: error_page
+        lambda: |-
+          it.fill(id(error_color));
+          it.image((it.get_width() / 2), (it.get_height() / 2), id(casita_error), ImageAlign::CENTER);
+      - id: no_ha_page
+        lambda: |-
+          it.image((it.get_width() / 2), (it.get_height() / 2), id(error_no_ha), ImageAlign::CENTER);
+      - id: no_wifi_page
+        lambda: |-
+          it.image((it.get_width() / 2), (it.get_height() / 2), id(error_no_wifi), ImageAlign::CENTER);
+      - id: initializing_page
+        lambda: |-
+          it.fill(id(loading_color));
+          it.image((it.get_width() / 2), (it.get_height() / 2), id(casita_initializing), ImageAlign::CENTER);
+      - id: muted_page
+        lambda: |-
+          it.fill(Color::BLACK);
+          it.image((it.get_width() / 2), (it.get_height() / 2), id(casita_muted), ImageAlign::CENTER);
+          id(draw_timer_timeline).execute();
+          id(draw_active_timer_widget).execute();
