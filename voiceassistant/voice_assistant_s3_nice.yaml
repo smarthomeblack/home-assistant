@@ -11,7 +11,7 @@ substitutions:
   displaymodel: "ili9341"
   invertcolors: "true" 
   loading_illustration_file: https://github.com/RealDeco/xiaozhi-esphome/raw/main/images/${imagemodel}/${imagewidth}x${imageheight}/loading.png
-  idle_illustration_file: https://github.com/RealDeco/xiaozhi-esphome/raw/main/images/${imagemodel}/${imagewidth}x${imageheight}/idle.png
+  idle_illustration_file: idle.png
   listening_illustration_file: https://github.com/RealDeco/xiaozhi-esphome/raw/main/images/${imagemodel}/${imagewidth}x${imageheight}/listening.png
   thinking_illustration_file: https://github.com/RealDeco/xiaozhi-esphome/raw/main/images/${imagemodel}/${imagewidth}x${imageheight}/thinking.png
   replying_illustration_file: https://github.com/RealDeco/xiaozhi-esphome/raw/main/images/${imagemodel}/${imagewidth}x${imageheight}/replying.png
@@ -155,6 +155,40 @@ binary_sensor:
         then:
           - button.press: factory_reset_btn
 
+sensor:
+  # POWER_ADC_CHANNEL = ADC_CHANNEL_8 (GPIO9)
+  # Mốc pin : 2150 -> 0%, 2450 -> 100%
+  - platform: adc
+    pin: GPIO9
+    id: battery_adc_raw
+    name: "Battery ADC Raw"
+    update_interval: 1s
+    attenuation: 12db
+    raw: true
+    entity_category: diagnostic
+    filters:
+      - sliding_window_moving_average:
+          window_size: 10
+          send_every: 1
+
+  - platform: template
+    id: battery_level
+    name: "Battery Level"
+    unit_of_measurement: "%"
+    device_class: battery
+    state_class: measurement
+    accuracy_decimals: 0
+    update_interval: 10s
+    lambda: |-
+      const float adc = id(battery_adc_raw).state;
+      const float adc_min = 2150.0f;
+      const float adc_max = 2450.0f;
+
+      float pct = (adc - adc_min) * 100.0f / (adc_max - adc_min);
+      if (pct < 0.0f) pct = 0.0f;
+      if (pct > 100.0f) pct = 100.0f;
+      return pct;
+
 output:
   - platform: ledc
     id: backlight_output
@@ -175,7 +209,7 @@ light:
     name: none
     disabled_by_default: false
     entity_category: config
-    pin: GPIO48
+    pin: GPIO42
     default_transition_length: 0s
     chipset: WS2812
     num_leds: 1
