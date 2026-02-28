@@ -6,8 +6,8 @@ substitutions:
   name: voiceassistantdisplaywifi
   friendly_name: ESP32S3 Assistant Display Wifi
   imagemodel: "Mario" # (options are: Eyes2)
-  imagewidth: "240" # Images có sẵn là 240x320
-  imageheight: "240" # Images có sẵn là 240x320
+  imagewidth: "240" # Cấu hình giữ nguyên 240 để tải thư mục 240x240
+  imageheight: "240" 
   displaymodel: "st7789v"
   invertcolors: "true" 
   loading_illustration_file: https://github.com/RealDeco/xiaozhi-esphome/raw/main/images/${imagemodel}/${imagewidth}x${imageheight}/loading.png
@@ -92,7 +92,7 @@ logger:
 
 wifi:
   ssid: Black
-  password: 0964343466
+  password: 12345678
   output_power: 8.5dB
   ap:
     ssid: "ESP32S3 Assistant"
@@ -175,10 +175,10 @@ light:
     name: none
     disabled_by_default: false
     entity_category: config
-    pin: GPIO37
+    pin: GPIO48
     default_transition_length: 0s
     chipset: WS2812
-    num_leds: 30
+    num_leds: 1
     rgb_order: grb
     effects:
       - pulse:
@@ -1117,8 +1117,10 @@ display:
     reset_pin: 9
     update_interval: never
     dimensions:
-        height: 240
+        height: 280
         width: 240
+        offset_height: 20
+        offset_width: 0
     transform:
       swap_xy: false
       mirror_x: false
@@ -1168,7 +1170,7 @@ display:
                 res.height = res.lines.size() * res.line_height; return res;
             };
 
-            int current_y = 240; 
+            int current_y = it.get_height(); 
             for (int i = id(chat_msgs).size() - 1; i >= 0; --i) {
                 std::string text = id(chat_msgs)[i];
                 bool is_user = id(chat_is_user)[i];
@@ -1182,7 +1184,7 @@ display:
                 if (current_y + bubble_h < 24) break; 
                 
                 int bubble_y = current_y; 
-                int bubble_x = is_user ? (240 - bubble_w - 10) : 10;
+                int bubble_x = is_user ? (it.get_width() - bubble_w - 10) : 10;
                 Color bg_color = is_user ? Color(149, 236, 105) : Color::WHITE;
                 
                 it.filled_rectangle(bubble_x, bubble_y, bubble_w, bubble_h, bg_color);
@@ -1192,11 +1194,11 @@ display:
             }
 
             if (id(chat_msgs).empty()) {
-                it.printf(120, 120, id(font_request), Color::BLACK, TextAlign::CENTER, "Đang chờ trò chuyện...");
+                it.printf(it.get_width() / 2, it.get_height() / 2, id(font_request), Color::BLACK, TextAlign::CENTER, "Đang chờ trò chuyện...");
             }
             
-            it.filled_rectangle(0, 0, 240, 24, Color(220, 220, 220));
-            it.printf(120, 12, id(font_request), Color(10, 200, 10), TextAlign::CENTER, "Đang Nghe...");
+            it.filled_rectangle(0, 0, it.get_width(), 24, Color(220, 220, 220));
+            it.printf(it.get_width() / 2, 12, id(font_request), Color(10, 200, 10), TextAlign::CENTER, "Đang Nghe...");
           } else {
              it.fill(id(listening_color));
              it.image((it.get_width() / 2), (it.get_height() / 2), id(casita_listening), ImageAlign::CENTER);
@@ -1239,7 +1241,7 @@ display:
                 res.height = res.lines.size() * res.line_height; return res;
             };
 
-            int current_y = 240; 
+            int current_y = it.get_height(); 
             for (int i = id(chat_msgs).size() - 1; i >= 0; --i) {
                 std::string text = id(chat_msgs)[i];
                 bool is_user = id(chat_is_user)[i];
@@ -1253,7 +1255,7 @@ display:
                 if (current_y + bubble_h < 24) break; 
                 
                 int bubble_y = current_y; 
-                int bubble_x = is_user ? (240 - bubble_w - 10) : 10;
+                int bubble_x = is_user ? (it.get_width() - bubble_w - 10) : 10;
                 Color bg_color = is_user ? Color(149, 236, 105) : Color::WHITE;
                 
                 it.filled_rectangle(bubble_x, bubble_y, bubble_w, bubble_h, bg_color);
@@ -1262,8 +1264,8 @@ display:
                 }
             }
 
-            it.filled_rectangle(0, 0, 240, 24, Color(220, 220, 220));
-            it.printf(120, 12, id(font_request), Color(10, 10, 200), TextAlign::CENTER, "Đang Xử Lý...");
+            it.filled_rectangle(0, 0, it.get_width(), 24, Color(220, 220, 220));
+            it.printf(it.get_width() / 2, 12, id(font_request), Color(10, 10, 200), TextAlign::CENTER, "Đang Xử Lý...");
           } else {
              it.fill(Color::BLACK);
              it.image((it.get_width() / 2), (it.get_height() / 2), id(casita_thinking), ImageAlign::CENTER);
@@ -1306,7 +1308,7 @@ display:
                 res.height = res.lines.size() * res.line_height; return res;
             };
 
-            int current_y = 240; 
+            int current_y = it.get_height(); 
             for (int i = id(chat_msgs).size() - 1; i >= 0; --i) {
                 std::string text = id(chat_msgs)[i];
                 bool is_user = id(chat_is_user)[i];
@@ -1320,7 +1322,7 @@ display:
                 if (current_y + bubble_h < 24) break; 
                 
                 int bubble_y = current_y; 
-                int bubble_x = is_user ? (240 - bubble_w - 10) : 10;
+                int bubble_x = is_user ? (it.get_width() - bubble_w - 10) : 10;
                 Color bg_color = is_user ? Color(149, 236, 105) : Color::WHITE;
                 
                 it.filled_rectangle(bubble_x, bubble_y, bubble_w, bubble_h, bg_color);
@@ -1329,8 +1331,8 @@ display:
                 }
             }
 
-            it.filled_rectangle(0, 0, 240, 24, Color(220, 220, 220));
-            it.printf(120, 12, id(font_request), Color(100, 100, 100), TextAlign::CENTER, "Đang Trả Lời...");
+            it.filled_rectangle(0, 0, it.get_width(), 24, Color(220, 220, 220));
+            it.printf(it.get_width() / 2, 12, id(font_request), Color(100, 100, 100), TextAlign::CENTER, "Đang Trả Lời...");
           } else {
              it.fill(Color::BLACK);
              it.image((it.get_width() / 2), (it.get_height() / 2), id(casita_replying), ImageAlign::CENTER);
