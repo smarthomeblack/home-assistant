@@ -5,27 +5,8 @@
 substitutions:
   name: voiceassistantdisplaynice
   friendly_name: ESP32S3 Assistant Display
-  imagemodel: "Mario" # (options are: Eyes2)
-  imagewidth: "240" # Images có sẵn là 240x320
-  imageheight: "320" # Images có sẵn là 240x320
   displaymodel: "ili9341"
-  invertcolors: "true" 
-  loading_illustration_file: https://github.com/RealDeco/xiaozhi-esphome/raw/main/images/${imagemodel}/${imagewidth}x${imageheight}/loading.png
-  idle_illustration_file: idle.png
-  listening_illustration_file: https://github.com/RealDeco/xiaozhi-esphome/raw/main/images/${imagemodel}/${imagewidth}x${imageheight}/listening.png
-  thinking_illustration_file: https://github.com/RealDeco/xiaozhi-esphome/raw/main/images/${imagemodel}/${imagewidth}x${imageheight}/thinking.png
-  replying_illustration_file: https://github.com/RealDeco/xiaozhi-esphome/raw/main/images/${imagemodel}/${imagewidth}x${imageheight}/replying.png
-  error_illustration_file: https://github.com/RealDeco/xiaozhi-esphome/raw/main/images/${imagemodel}/${imagewidth}x${imageheight}/error.png
-  timer_finished_illustration_file: https://github.com/RealDeco/xiaozhi-esphome/raw/main/images/${imagemodel}/${imagewidth}x${imageheight}/timer_finished.png
-  mute_illustration_file: https://github.com/RealDeco/xiaozhi-esphome/raw/main/images/Mute/${imagewidth}x${imageheight}/mute.png
-  loading_illustration_background_color: "000000"
-  idle_illustration_background_color: "000000"
-  listening_illustration_background_color: "000000"
-  thinking_illustration_background_color: "000000"
-  replying_illustration_background_color: "000000"
-  error_illustration_background_color: "000000"
-  allowed_characters: "aàáảãạăằắẳẵặâầấẩẫậbcdđeèéẻẽẹêềếểễệghiìíỉĩịklmnoòóỏõọôồốổỗộơờớởỡợpqrstuùúủũụưừứửữựvxyỳýỷỹỵAÀÁẢÃẠĂẰẮẲẴẶÂẦẤẨẪẬBCDĐEÈÉẺẼẸÊỀẾỂỄỆGHIÌÍỈĨỊKLMNOÒÓỎÕỌÔỒỐỔỖỘƠỜỚỞỠỢPQRSTUÙÚỦŨỤƯỪỨỬỮỰVXYỲÝỶỸỴ0123456789 !,.?-+%&*@#$()/\\:;<>[]{}| "
-  font_family: "Noto Sans"
+  invertcolors: "true"
   wake_word_triggered_sound_file: start.wav
   end_sound_file: end.flac
   voice_assist_idle_phase_id: "1"
@@ -74,7 +55,6 @@ psram:
 
 api:
   on_client_connected:
-    - script.execute: draw_display
     - lambda: |-
         if (!id(boot_sound_played)) {
           id(boot_sound_played) = true;
@@ -82,13 +62,26 @@ api:
             id(play_sound)->execute(true, id(wake_word_triggered_sound));
           }
         }
+    - lambda: id(init_in_progress) = false;
+    - script.execute: start_wake_word
+    - script.execute: set_idle_or_mute_phase
   on_client_disconnected:
-    - script.execute: draw_display
+    - script.execute: stop_wake_word
+    - lambda: id(voice_assistant_phase) = ${voice_assist_not_ready_phase_id};
 ota:
   - platform: esphome
     id: ota_esphome
 
 logger:
+
+time:
+  - platform: homeassistant
+    id: ha_time
+
+http_request:
+  verify_ssl: false
+  timeout: 20s
+  buffer_size_rx: 4096
 
 wifi:
   ssid: Black
@@ -97,10 +90,7 @@ wifi:
   ap:
     ssid: "ESP32S3 Assistant"
     password: "11223344"
-  on_connect:
-    - script.execute: draw_display
-  on_disconnect:
-    - script.execute: draw_display
+
 captive_portal:
 
 button:
@@ -181,6 +171,7 @@ sensor:
     update_interval: 10s
     lambda: |-
       const float adc = id(battery_adc_raw).state;
+      if (std::isnan(adc)) return NAN;
       const float adc_min = 2150.0f;
       const float adc_max = 2450.0f;
 
@@ -188,6 +179,381 @@ sensor:
       if (pct < 0.0f) pct = 0.0f;
       if (pct > 100.0f) pct = 100.0f;
       return pct;
+    on_value:
+      then:
+        - lvgl.label.update:
+            id: lbl_bat_icon
+            text: !lambda |-
+              float lvl = x;
+              if (lvl >= 95) return "\U000F0079";
+              else if (lvl >= 85) return "\U000F0082";
+              else if (lvl >= 75) return "\U000F0081";
+              else if (lvl >= 65) return "\U000F0080";
+              else if (lvl >= 55) return "\U000F007F";
+              else if (lvl >= 45) return "\U000F007E";
+              else if (lvl >= 35) return "\U000F007D";
+              else if (lvl >= 25) return "\U000F007C";
+              else if (lvl >= 15) return "\U000F007B";
+              else if (lvl >= 5) return "\U000F007A";
+              else return "\U000F0083";
+        - lvgl.label.update:
+            id: lbl_p1_bat_icon
+            text: !lambda |-
+              float lvl = x;
+              if (lvl >= 95) return "\U000F0079";
+              else if (lvl >= 85) return "\U000F0082";
+              else if (lvl >= 75) return "\U000F0081";
+              else if (lvl >= 65) return "\U000F0080";
+              else if (lvl >= 55) return "\U000F007F";
+              else if (lvl >= 45) return "\U000F007E";
+              else if (lvl >= 35) return "\U000F007D";
+              else if (lvl >= 25) return "\U000F007C";
+              else if (lvl >= 15) return "\U000F007B";
+              else if (lvl >= 5) return "\U000F007A";
+              else return "\U000F0083";
+        - lvgl.label.update:
+            id: lbl_bat_text
+            text:
+              format: "%.0f%%"
+              args: ['x']
+        - lvgl.label.update:
+            id: lbl_p1_bat_text
+            text:
+              format: "%.0f%%"
+              args: ['x']
+
+  # Weather sensors from page.yaml
+  - platform: homeassistant
+    id: weather_high_day0
+    entity_id: sensor.weather_forecast_day_0_high
+    on_value:
+      then:
+        - lvgl.label.update:
+            id: lbl_wday0_temp
+            text:
+              format: "%.1f"
+              args: ['x']
+    unit_of_measurement: '°C'
+    internal: true
+  - platform: homeassistant
+    id: weather_low_day0
+    entity_id: sensor.weather_forecast_day_0_low
+    unit_of_measurement: '°C'
+    internal: true
+  - platform: homeassistant
+    id: weather_high_day1
+    entity_id: sensor.weather_forecast_day_1_high
+    on_value:
+      then:
+        - lvgl.label.update:
+            id: lbl_wday1_temp
+            text:
+              format: "%.1f"
+              args: ['x']
+    unit_of_measurement: '°C'
+    internal: true
+  - platform: homeassistant
+    id: weather_low_day1
+    entity_id: sensor.weather_forecast_day_1_low
+    unit_of_measurement: '°C'
+    internal: true
+  - platform: homeassistant
+    id: weather_high_day2
+    entity_id: sensor.weather_forecast_day_2_high
+    on_value:
+      then:
+        - lvgl.label.update:
+            id: lbl_wday2_temp
+            text:
+              format: "%.1f"
+              args: ['x']
+    unit_of_measurement: '°C'
+    internal: true
+  - platform: homeassistant
+    id: weather_low_day2
+    entity_id: sensor.weather_forecast_day_2_low
+    unit_of_measurement: '°C'
+    internal: true
+  - platform: homeassistant
+    id: weather_high_day3
+    entity_id: sensor.weather_forecast_day_3_high
+    on_value:
+      then:
+        - lvgl.label.update:
+            id: lbl_wday3_temp
+            text:
+              format: "%.1f"
+              args: ['x']
+    unit_of_measurement: '°C'
+    internal: true
+  - platform: homeassistant
+    id: weather_low_day3
+    entity_id: sensor.weather_forecast_day_3_low
+    unit_of_measurement: '°C'
+    internal: true
+  - platform: homeassistant
+    id: weather_high_day4
+    entity_id: sensor.weather_forecast_day_4_high
+    on_value:
+      then:
+        - lvgl.label.update:
+            id: lbl_wday4_temp
+            text:
+              format: "%.1f"
+              args: ['x']
+    unit_of_measurement: '°C'
+    internal: true
+  - platform: homeassistant
+    id: weather_low_day4
+    entity_id: sensor.weather_forecast_day_4_low
+    unit_of_measurement: '°C'
+    internal: true
+
+  - platform: wifi_signal
+    id: wifi_signal_dbm
+    on_value:
+      then:
+        - lvgl.label.update:
+            id: lbl_wifi_icon
+            text: !lambda |-
+              float sig = x;
+              if (sig >= -50) return "\U000F0928";
+              else if (sig >= -70) return "\U000F0925";
+              else if (sig >= -85) return "\U000F0922";
+              else return "\U000F091F";
+        - lvgl.label.update:
+            id: lbl_p1_wifi_icon
+            text: !lambda |-
+              float sig = x;
+              if (sig >= -50) return "\U000F0928";
+              else if (sig >= -70) return "\U000F0925";
+              else if (sig >= -85) return "\U000F0922";
+              else return "\U000F091F";
+        - lvgl.label.update:
+            id: lbl_wifi_text
+            text:
+              format: "%.0fdB"
+              args: ['x']
+        - lvgl.label.update:
+            id: lbl_p1_wifi_text
+            text:
+              format: "%.0fdB"
+              args: ['x']
+    internal: true
+  - platform: homeassistant
+    id: sensor_cam_bien_nhiet_am_phong_lam_viec_temperature
+    entity_id: sensor.cam_bien_nhiet_am_phong_lam_viec_temperature
+    on_value:
+      then:
+        - lvgl.label.update:
+            id: lbl_temp_text
+            text:
+              format: "%.1f°C"
+              args: ['x']
+        - lvgl.label.update:
+            id: lbl_p1_temp_text
+            text:
+              format: "%.1f°C"
+              args: ['x']
+    internal: true
+  - platform: homeassistant
+    id: sensor_cam_bien_nhiet_am_phong_lam_viec_humidity
+    entity_id: sensor.cam_bien_nhiet_am_phong_lam_viec_humidity
+    on_value:
+      then:
+        - lvgl.label.update:
+            id: lbl_hum_text
+            text:
+              format: "%.0f%%"
+              args: ['x']
+        - lvgl.label.update:
+            id: lbl_p1_hum_text
+            text:
+              format: "%.0f%%"
+              args: ['x']
+    internal: true
+
+text_sensor:
+  # Weather condition sensors
+  - platform: homeassistant
+    id: weather_cond_day0
+    entity_id: sensor.weather_forecast_day_0_condition
+    on_value:
+      then:
+        - lvgl.label.update:
+            id: lbl_wday0_icon
+            text: !lambda |-
+              std::string c = x;
+              if (c == "clear-night") return "\U000F0594";
+              if (c == "cloudy") return "\U000F0590";
+              if (c == "exceptional") return "\U000F0026";
+              if (c == "fog") return "\U000F0591";
+              if (c == "hail") return "\U000F0592";
+              if (c == "lightning") return "\U000F0593";
+              if (c == "lightning-rainy") return "\U000F067E";
+              if (c == "partlycloudy") return "\U000F0595";
+              if (c == "pouring") return "\U000F0596";
+              if (c == "rainy") return "\U000F0597";
+              if (c == "snowy") return "\U000F0598";
+              if (c == "snowy-rainy") return "\U000F067F";
+              if (c == "sunny") return "\U000F0599";
+              if (c == "windy") return "\U000F059D";
+              if (c == "windy-variant") return "\U000F059E";
+              return "\U000F0590";
+    internal: true
+  - platform: homeassistant
+    id: weather_cond_day1
+    entity_id: sensor.weather_forecast_day_1_condition
+    on_value:
+      then:
+        - lvgl.label.update:
+            id: lbl_wday1_icon
+            text: !lambda |-
+              std::string c = x;
+              if (c == "clear-night") return "\U000F0594";
+              if (c == "cloudy") return "\U000F0590";
+              if (c == "exceptional") return "\U000F0026";
+              if (c == "fog") return "\U000F0591";
+              if (c == "hail") return "\U000F0592";
+              if (c == "lightning") return "\U000F0593";
+              if (c == "lightning-rainy") return "\U000F067E";
+              if (c == "partlycloudy") return "\U000F0595";
+              if (c == "pouring") return "\U000F0596";
+              if (c == "rainy") return "\U000F0597";
+              if (c == "snowy") return "\U000F0598";
+              if (c == "snowy-rainy") return "\U000F067F";
+              if (c == "sunny") return "\U000F0599";
+              if (c == "windy") return "\U000F059D";
+              if (c == "windy-variant") return "\U000F059E";
+              return "\U000F0590";
+    internal: true
+  - platform: homeassistant
+    id: weather_cond_day2
+    entity_id: sensor.weather_forecast_day_2_condition
+    on_value:
+      then:
+        - lvgl.label.update:
+            id: lbl_wday2_icon
+            text: !lambda |-
+              std::string c = x;
+              if (c == "clear-night") return "\U000F0594";
+              if (c == "cloudy") return "\U000F0590";
+              if (c == "exceptional") return "\U000F0026";
+              if (c == "fog") return "\U000F0591";
+              if (c == "hail") return "\U000F0592";
+              if (c == "lightning") return "\U000F0593";
+              if (c == "lightning-rainy") return "\U000F067E";
+              if (c == "partlycloudy") return "\U000F0595";
+              if (c == "pouring") return "\U000F0596";
+              if (c == "rainy") return "\U000F0597";
+              if (c == "snowy") return "\U000F0598";
+              if (c == "snowy-rainy") return "\U000F067F";
+              if (c == "sunny") return "\U000F0599";
+              if (c == "windy") return "\U000F059D";
+              if (c == "windy-variant") return "\U000F059E";
+              return "\U000F0590";
+    internal: true
+  - platform: homeassistant
+    id: weather_cond_day3
+    entity_id: sensor.weather_forecast_day_3_condition
+    on_value:
+      then:
+        - lvgl.label.update:
+            id: lbl_wday3_icon
+            text: !lambda |-
+              std::string c = x;
+              if (c == "clear-night") return "\U000F0594";
+              if (c == "cloudy") return "\U000F0590";
+              if (c == "exceptional") return "\U000F0026";
+              if (c == "fog") return "\U000F0591";
+              if (c == "hail") return "\U000F0592";
+              if (c == "lightning") return "\U000F0593";
+              if (c == "lightning-rainy") return "\U000F067E";
+              if (c == "partlycloudy") return "\U000F0595";
+              if (c == "pouring") return "\U000F0596";
+              if (c == "rainy") return "\U000F0597";
+              if (c == "snowy") return "\U000F0598";
+              if (c == "snowy-rainy") return "\U000F067F";
+              if (c == "sunny") return "\U000F0599";
+              if (c == "windy") return "\U000F059D";
+              if (c == "windy-variant") return "\U000F059E";
+              return "\U000F0590";
+    internal: true
+  - platform: homeassistant
+    id: weather_cond_day4
+    entity_id: sensor.weather_forecast_day_4_condition
+    on_value:
+      then:
+        - lvgl.label.update:
+            id: lbl_wday4_icon
+            text: !lambda |-
+              std::string c = x;
+              if (c == "clear-night") return "\U000F0594";
+              if (c == "cloudy") return "\U000F0590";
+              if (c == "exceptional") return "\U000F0026";
+              if (c == "fog") return "\U000F0591";
+              if (c == "hail") return "\U000F0592";
+              if (c == "lightning") return "\U000F0593";
+              if (c == "lightning-rainy") return "\U000F067E";
+              if (c == "partlycloudy") return "\U000F0595";
+              if (c == "pouring") return "\U000F0596";
+              if (c == "rainy") return "\U000F0597";
+              if (c == "snowy") return "\U000F0598";
+              if (c == "snowy-rainy") return "\U000F067F";
+              if (c == "sunny") return "\U000F0599";
+              if (c == "windy") return "\U000F059D";
+              if (c == "windy-variant") return "\U000F059E";
+              return "\U000F0590";
+    internal: true
+
+  - platform: homeassistant
+    id: weather_accuweather_hai_duong_txt
+    entity_id: weather.accuweather_hai_duong
+    internal: true
+
+  # ===== Chat text sensors =====
+  - id: text_request
+    platform: template
+    icon: mdi:ear-hearing
+    name: "Request"
+    entity_category: diagnostic
+    on_value:
+      lambda: |-
+        std::string req = id(text_request).state.c_str();
+        if(req.length() > 0) {
+          if(req.length() > 500) {
+            std::string truncated = esphome::str_truncate(req.c_str(), 499);
+            id(text_request).state = (truncated + "...").c_str();
+            req = id(text_request).state.c_str();
+          }
+          id(chat_msgs).push_back(req);
+          id(chat_is_user).push_back(true);
+          if(id(chat_msgs).size() > 10) {
+            id(chat_msgs).erase(id(chat_msgs).begin());
+            id(chat_is_user).erase(id(chat_is_user).begin());
+          }
+        }
+  - id: text_response
+    platform: template
+    icon: mdi:react
+    name: "Response"
+    entity_category: diagnostic
+    on_value:
+      lambda: |-
+        std::string res = id(text_response).state.c_str();
+        if(res.length() > 0) {
+          if(res.length() > 500) {
+            std::string truncated = esphome::str_truncate(res.c_str(), 499);
+            id(text_response).state = (truncated + "...").c_str();
+            res = id(text_response).state.c_str();
+          }
+          id(chat_msgs).push_back(res);
+          id(chat_is_user).push_back(false);
+          if(id(chat_msgs).size() > 10) {
+            id(chat_msgs).erase(id(chat_msgs).begin());
+            id(chat_is_user).erase(id(chat_is_user).begin());
+          }
+        }
 
 output:
   - platform: ledc
@@ -337,7 +703,6 @@ media_player:
           then:
             - script.execute: start_wake_word
             - script.execute: set_idle_or_mute_phase
-            - script.execute: draw_display
 
 micro_wake_word:
   id: mww
@@ -404,13 +769,12 @@ voice_assistant:
               green: 0%
               effect: "Fast Pulse"
     - lambda: id(voice_assistant_phase) = ${voice_assist_thinking_phase_id};
-    # - microphone.mute: # Tắt để tránh sập I2S chung
     - script.execute: draw_display
   on_stt_end:
     - text_sensor.template.publish:
         id: text_request
-        state: !lambda return x; 
-    - script.execute: draw_display        
+        state: !lambda return x;
+    - script.execute: draw_display
   on_tts_start:
     # Replying: tắt mic + tắt wakeword + bật loa
     - script.execute: audio_mode_reply
@@ -425,12 +789,12 @@ voice_assistant:
               green: 0%
               brightness: 100%
               effect: none
+    - lambda: id(voice_assistant_phase) = ${voice_assist_replying_phase_id};
     - text_sensor.template.publish:
         id: text_response
         state: !lambda return x;
-    - lambda: id(voice_assistant_phase) = ${voice_assist_replying_phase_id};
     - script.execute: draw_display
-    
+
   on_end:
     # - microphone.unmute:
     - lambda: id(wake_word_just_triggered) = false;
@@ -493,7 +857,6 @@ voice_assistant:
           lambda: return !id(init_in_progress);
         then:
           - lambda: id(voice_assistant_phase) = ${voice_assist_error_phase_id};
-          - script.execute: draw_display
           - delay: 1s
           - if:
               condition:
@@ -502,7 +865,6 @@ voice_assistant:
                 - lambda: id(voice_assistant_phase) = ${voice_assist_idle_phase_id};
               else:
                 - lambda: id(voice_assistant_phase) = ${voice_assist_muted_phase_id};
-          - script.execute: draw_display
     - if:
         condition:
           - switch.is_on: use_listen_light
@@ -520,19 +882,9 @@ voice_assistant:
     - lambda: id(init_in_progress) = false;
     - script.execute: start_wake_word
     - script.execute: set_idle_or_mute_phase
-    - script.execute: draw_display
   on_client_disconnected:
     - script.execute: stop_wake_word
     - lambda: id(voice_assistant_phase) = ${voice_assist_not_ready_phase_id};
-    - script.execute: draw_display
-  on_timer_started:
-    - script.execute: draw_display
-  on_timer_cancelled:
-    - script.execute: draw_display
-  on_timer_updated:
-    - script.execute: draw_display
-  on_timer_tick:
-    - script.execute: draw_display
   on_timer_finished:
     - switch.turn_on: timer_ringing
     - if:
@@ -549,7 +901,6 @@ voice_assistant:
     - wait_until:
         media_player.is_announcing:
     - lambda: id(voice_assistant_phase) = ${voice_assist_timer_finished_phase_id};
-    - script.execute: draw_display
     - light.turn_off: led
 
 script:
@@ -601,151 +952,72 @@ script:
     then:
       - if:
           condition:
-            lambda: return !id(init_in_progress);
+            lambda: |-
+              int phase = id(voice_assistant_phase);
+              return phase == ${voice_assist_listening_phase_id} ||
+                     phase == ${voice_assist_thinking_phase_id} ||
+                     phase == ${voice_assist_replying_phase_id};
           then:
-            - if:
-                condition:
-                  wifi.connected:
-                then:
-                  - if:
-                      condition:
-                        api.connected:
-                      then:
-                        - lambda: |
-                            switch(id(voice_assistant_phase)) {
-                              case ${voice_assist_listening_phase_id}:
-                                id(s3_box_lcd).show_page(listening_page);
-                                id(s3_box_lcd).update();
-                                break;
-                              case ${voice_assist_thinking_phase_id}:
-                                id(s3_box_lcd).show_page(thinking_page);
-                                id(s3_box_lcd).update();
-                                break;
-                              case ${voice_assist_replying_phase_id}:
-                                id(s3_box_lcd).show_page(replying_page);
-                                id(s3_box_lcd).update();
-                                break;
-                              case ${voice_assist_error_phase_id}:
-                                id(s3_box_lcd).show_page(error_page);
-                                id(s3_box_lcd).update();
-                                break;
-                              case ${voice_assist_muted_phase_id}:
-                                id(s3_box_lcd).show_page(muted_page);
-                                id(s3_box_lcd).update();
-                                break;
-                              case ${voice_assist_not_ready_phase_id}:
-                                id(s3_box_lcd).show_page(no_ha_page);
-                                id(s3_box_lcd).update();
-                                break;
-                              case ${voice_assist_timer_finished_phase_id}:
-                                id(s3_box_lcd).show_page(timer_finished_page);
-                                id(s3_box_lcd).update();
-                                break;
-                              default:
-                                id(s3_box_lcd).show_page(idle_page);
-                                id(s3_box_lcd).update();
-                            }
-                      else:
-                        - display.page.show: no_ha_page
-                        - component.update: s3_box_lcd
-                else:
-                  - display.page.show: no_wifi_page
-                  - component.update: s3_box_lcd
+            - lvgl.page.show: page_1
+            - lambda: |-
+                int phase = id(voice_assistant_phase);
+                std::string status = "Đang chờ...";
+                lv_color_t color = lv_color_hex(0xFFFFFF);
+                if (phase == ${voice_assist_listening_phase_id}) {
+                  status = "Đang Nghe...";
+                  color = lv_color_hex(0x0AC80A);
+                } else if (phase == ${voice_assist_thinking_phase_id}) {
+                  status = "Đang Xử Lý...";
+                  color = lv_color_hex(0x0A0AC8);
+                } else if (phase == ${voice_assist_replying_phase_id}) {
+                  status = "Đang Trả Lời...";
+                  color = lv_color_hex(0x646464);
+                }
+                lv_label_set_text(id(lbl_chat_status), status.c_str());
+                lv_obj_set_style_text_color(id(lbl_chat_status), color, 0);
+
+                // Xóa tất cả children cũ trong container
+                lv_obj_t *cont = id(chat_container);
+                lv_obj_set_style_pad_row(cont, 4, 0);
+                while (lv_obj_get_child_cnt(cont) > 0) {
+                  lv_obj_del(lv_obj_get_child(cont, 0));
+                }
+
+                if (id(chat_msgs).empty()) {
+                  lv_obj_t *lbl = lv_label_create(cont);
+                  lv_label_set_text(lbl, "Đang chờ trò chuyện...");
+                  lv_obj_set_width(lbl, 228);
+                  lv_label_set_long_mode(lbl, LV_LABEL_LONG_WRAP);
+                  lv_obj_set_style_text_font(lbl, id(font_chat_content), 0);
+                  lv_obj_set_style_text_color(lbl, lv_color_hex(0xAAAAAA), 0);
+                } else {
+                  for (int i = 0; i < (int)id(chat_msgs).size(); i++) {
+                    bool is_user = id(chat_is_user)[i];
+                    std::string prefix = is_user ? "User: " : "LLM: ";
+                    std::string full_text = prefix + id(chat_msgs)[i];
+
+                    lv_obj_t *lbl = lv_label_create(cont);
+                    lv_label_set_text(lbl, full_text.c_str());
+                    lv_obj_set_width(lbl, 228);
+                    lv_label_set_long_mode(lbl, LV_LABEL_LONG_WRAP);
+                    lv_obj_set_style_text_font(lbl, id(font_chat_content), 0);
+
+                    if (is_user) {
+                      // User: màu xanh lá
+                      lv_obj_set_style_text_color(lbl, lv_color_hex(0x95EC69), 0);
+                    } else {
+                      // LLM: màu trắng
+                      lv_obj_set_style_text_color(lbl, lv_color_hex(0xFFFFFF), 0);
+                    }
+                  }
+                }
+
+                // Scroll xuống cuối cùng
+                lv_obj_scroll_to_y(cont, LV_COORD_MAX, LV_ANIM_OFF);
           else:
-            - display.page.show: initializing_page
-            - component.update: s3_box_lcd
+            - lvgl.page.show: page_0
+      - component.update: s3_box_lcd
 
-
-  - id: fetch_first_active_timer
-    then:
-      - lambda: |
-          const auto timers = id(va).get_timers();
-          if (timers.empty()) return;
-          auto output_timer = timers[0];
-          for (auto &iterable_timer : timers) {
-            if (iterable_timer.is_active && iterable_timer.seconds_left <= output_timer.seconds_left) {
-              output_timer = iterable_timer;
-            }
-          }
-          id(global_first_active_timer) = output_timer;
-  - id: check_if_timers_active
-    then:
-      - lambda: |
-          const auto timers = id(va).get_timers();
-          bool output = false;
-          if (timers.size() > 0) {
-            for (auto &iterable_timer : timers) {
-              if(iterable_timer.is_active) {
-                output = true;
-              }
-            }
-          }
-          id(global_is_timer_active) = output;
-  - id: fetch_first_timer
-    then:
-      - lambda: |
-          const auto timers = id(va).get_timers();
-          if (timers.empty()) return;
-          auto output_timer = timers[0];
-          for (auto &iterable_timer : timers) {
-            if (iterable_timer.seconds_left <= output_timer.seconds_left) {
-              output_timer = iterable_timer;
-            }
-          }
-          id(global_first_timer) = output_timer;
-  - id: check_if_timers
-    then:
-      - lambda: |
-          const auto timers = id(va).get_timers();
-          bool output = false;
-          if (timers.size() > 0) {
-            output = true;
-          }
-          id(global_is_timer) = output;
-  - id: draw_timer_timeline
-    then:
-      - lambda: |
-          id(check_if_timers_active).execute();
-          id(check_if_timers).execute();
-          if (id(global_is_timer_active)){
-            id(fetch_first_active_timer).execute();
-            int active_pixels = round( 240 * id(global_first_active_timer).seconds_left / max(id(global_first_active_timer).total_seconds , static_cast<uint32_t>(1)) );
-            if (active_pixels > 0){
-              id(s3_box_lcd).filled_rectangle(0 , 225 , 240 , 15 , Color::WHITE );
-              id(s3_box_lcd).filled_rectangle(0 , 226 , active_pixels , 13 , id(active_timer_color) );
-            }
-          } else if (id(global_is_timer)){
-            id(fetch_first_timer).execute();
-            int active_pixels = round( 240 * id(global_first_timer).seconds_left / max(id(global_first_timer).total_seconds , static_cast<uint32_t>(1)));
-            if (active_pixels > 0){
-              id(s3_box_lcd).filled_rectangle(0 , 225 , 240 , 15 , Color::WHITE );
-              id(s3_box_lcd).filled_rectangle(0 , 226 , active_pixels , 13 , id(paused_timer_color) );
-            }
-          }
-  - id: draw_active_timer_widget
-    then:
-      - lambda: |
-          id(check_if_timers_active).execute();
-          if (id(global_is_timer_active)){
-            id(s3_box_lcd).filled_rectangle(80 , 40 , 160 , 50 , Color::WHITE );
-            id(s3_box_lcd).rectangle(80 , 40 , 160 , 50 , Color::BLACK );
-
-            id(fetch_first_active_timer).execute();
-            int hours_left = floor(id(global_first_active_timer).seconds_left / 3600);
-            int minutes_left = floor((id(global_first_active_timer).seconds_left - hours_left * 3600) / 60);
-            int seconds_left = id(global_first_active_timer).seconds_left - hours_left * 3600 - minutes_left * 60 ;
-            auto display_hours = (hours_left < 10 ? "0" : "") + std::to_string(hours_left);
-            auto display_minute = (minutes_left < 10 ? "0" : "") + std::to_string(minutes_left);
-            auto display_seconds = (seconds_left  < 10 ? "0" : "") + std::to_string(seconds_left) ;
-
-            std::string display_string = "";
-            if (hours_left > 0) {
-              display_string = display_hours + ":" + display_minute;
-            } else {
-              display_string = display_minute + ":" + display_seconds;
-            }
-            id(s3_box_lcd).printf(120, 47, id(font_timer), Color::BLACK, "%s", display_string.c_str());
-          }
   - id: start_wake_word
     then:
       - if:
@@ -840,11 +1112,9 @@ switch:
     on_turn_off:
       - microphone.unmute:
       - lambda: id(voice_assistant_phase) = ${voice_assist_idle_phase_id};
-      - script.execute: draw_display
     on_turn_on:
       - microphone.mute:
       - lambda: id(voice_assistant_phase) = ${voice_assist_muted_phase_id};
-      - script.execute: draw_display
   - platform: template
     id: timer_ringing
     optimistic: true
@@ -954,13 +1224,99 @@ select:
                       then:
                         - micro_wake_word.start
 
+# ============================================================================
+# LVGL Fonts
+# ============================================================================
+
+font:
+  - file:
+      type: gfonts
+      family: "Roboto"
+      weight: 700
+      italic: false
+    id: font_roboto_700_30
+    size: 30
+    glyphsets: [GF_Latin_Kernel, GF_Latin_Vietnamese]
+    ignore_missing_glyphs: true
+    glyphs: ["\U00000020", "\U00000021", "\U00000022", "\U00000023", "\U00000024", "\U00000025", "\U00000026", "\U00000027", "\U00000028", "\U00000029", "\U0000002A", "\U0000002B", "\U0000002C", "\U0000002D", "\U0000002E", "\U0000002F", "\U00000030", "\U00000031", "\U00000032", "\U00000033", "\U00000034", "\U00000035", "\U00000036", "\U00000037", "\U00000038", "\U00000039", "\U0000003A", "\U0000003B", "\U0000003C", "\U0000003D", "\U0000003E", "\U0000003F", "\U00000040", "\U00000041", "\U00000042", "\U00000043", "\U00000044", "\U00000045", "\U00000046", "\U00000047", "\U00000048", "\U00000049", "\U0000004A", "\U0000004B", "\U0000004C", "\U0000004D", "\U0000004E", "\U0000004F", "\U00000050", "\U00000051", "\U00000052", "\U00000053", "\U00000054", "\U00000055", "\U00000056", "\U00000057", "\U00000058", "\U00000059", "\U0000005A", "\U0000005B", "\U0000005C", "\U0000005D", "\U0000005E", "\U0000005F", "\U00000060", "\U00000061", "\U00000062", "\U00000063", "\U00000064", "\U00000065", "\U00000066", "\U00000067", "\U00000068", "\U00000069", "\U0000006A", "\U0000006B", "\U0000006C", "\U0000006D", "\U0000006E", "\U0000006F", "\U00000070", "\U00000071", "\U00000072", "\U00000073", "\U00000074", "\U00000075", "\U00000076", "\U00000077", "\U00000078", "\U00000079", "\U0000007A", "\U0000007B", "\U0000007C", "\U0000007D", "\U0000007E", "\U000000A0", "\U000000A1", "\U000000A2", "\U000000A3", "\U000000A4", "\U000000A5", "\U000000A6", "\U000000A7", "\U000000A8", "\U000000A9", "\U000000AA", "\U000000AB", "\U000000AC", "\U000000AD", "\U000000AE", "\U000000AF", "\U000000B0", "\U000000B1", "\U000000B2", "\U000000B3", "\U000000B4", "\U000000B5", "\U000000B6", "\U000000B7", "\U000000B8", "\U000000B9", "\U000000BA", "\U000000BB", "\U000000BC", "\U000000BD", "\U000000BE", "\U000000BF", "\U000000C0", "\U000000C1", "\U000000C2", "\U000000C3", "\U000000C4", "\U000000C5", "\U000000C6", "\U000000C7", "\U000000C8", "\U000000C9", "\U000000CA", "\U000000CB", "\U000000CC", "\U000000CD", "\U000000CE", "\U000000CF", "\U000000D0", "\U000000D1", "\U000000D2", "\U000000D3", "\U000000D4", "\U000000D5", "\U000000D6", "\U000000D7", "\U000000D8", "\U000000D9", "\U000000DA", "\U000000DB", "\U000000DC", "\U000000DD", "\U000000DE", "\U000000DF", "\U000000E0", "\U000000E1", "\U000000E2", "\U000000E3", "\U000000E4", "\U000000E5", "\U000000E6", "\U000000E7", "\U000000E8", "\U000000E9", "\U000000EA", "\U000000EB", "\U000000EC", "\U000000ED", "\U000000EE", "\U000000EF", "\U000000F0", "\U000000F1", "\U000000F2", "\U000000F3", "\U000000F4", "\U000000F5", "\U000000F6", "\U000000F7", "\U000000F8", "\U000000F9", "\U000000FA", "\U000000FB", "\U000000FC", "\U000000FD", "\U000000FE", "\U000000FF", "\U000003BC", "\U000003A9", "\U000020AC", "\U00002122"]
+  - file:
+      type: gfonts
+      family: "Roboto"
+      weight: 400
+      italic: false
+    id: font_roboto_400_18
+    size: 18
+    glyphsets: [GF_Latin_Kernel, GF_Latin_Vietnamese]
+    ignore_missing_glyphs: true
+    glyphs: ["\U00000020", "\U00000021", "\U00000022", "\U00000023", "\U00000024", "\U00000025", "\U00000026", "\U00000027", "\U00000028", "\U00000029", "\U0000002A", "\U0000002B", "\U0000002C", "\U0000002D", "\U0000002E", "\U0000002F", "\U00000030", "\U00000031", "\U00000032", "\U00000033", "\U00000034", "\U00000035", "\U00000036", "\U00000037", "\U00000038", "\U00000039", "\U0000003A", "\U0000003B", "\U0000003C", "\U0000003D", "\U0000003E", "\U0000003F", "\U00000040", "\U00000041", "\U00000042", "\U00000043", "\U00000044", "\U00000045", "\U00000046", "\U00000047", "\U00000048", "\U00000049", "\U0000004A", "\U0000004B", "\U0000004C", "\U0000004D", "\U0000004E", "\U0000004F", "\U00000050", "\U00000051", "\U00000052", "\U00000053", "\U00000054", "\U00000055", "\U00000056", "\U00000057", "\U00000058", "\U00000059", "\U0000005A", "\U0000005B", "\U0000005C", "\U0000005D", "\U0000005E", "\U0000005F", "\U00000060", "\U00000061", "\U00000062", "\U00000063", "\U00000064", "\U00000065", "\U00000066", "\U00000067", "\U00000068", "\U00000069", "\U0000006A", "\U0000006B", "\U0000006C", "\U0000006D", "\U0000006E", "\U0000006F", "\U00000070", "\U00000071", "\U00000072", "\U00000073", "\U00000074", "\U00000075", "\U00000076", "\U00000077", "\U00000078", "\U00000079", "\U0000007A", "\U0000007B", "\U0000007C", "\U0000007D", "\U0000007E", "\U000000A0", "\U000000A1", "\U000000A2", "\U000000A3", "\U000000A4", "\U000000A5", "\U000000A6", "\U000000A7", "\U000000A8", "\U000000A9", "\U000000AA", "\U000000AB", "\U000000AC", "\U000000AD", "\U000000AE", "\U000000AF", "\U000000B0", "\U000000B1", "\U000000B2", "\U000000B3", "\U000000B4", "\U000000B5", "\U000000B6", "\U000000B7", "\U000000B8", "\U000000B9", "\U000000BA", "\U000000BB", "\U000000BC", "\U000000BD", "\U000000BE", "\U000000BF", "\U000000C0", "\U000000C1", "\U000000C2", "\U000000C3", "\U000000C4", "\U000000C5", "\U000000C6", "\U000000C7", "\U000000C8", "\U000000C9", "\U000000CA", "\U000000CB", "\U000000CC", "\U000000CD", "\U000000CE", "\U000000CF", "\U000000D0", "\U000000D1", "\U000000D2", "\U000000D3", "\U000000D4", "\U000000D5", "\U000000D6", "\U000000D7", "\U000000D8", "\U000000D9", "\U000000DA", "\U000000DB", "\U000000DC", "\U000000DD", "\U000000DE", "\U000000DF", "\U000000E0", "\U000000E1", "\U000000E2", "\U000000E3", "\U000000E4", "\U000000E5", "\U000000E6", "\U000000E7", "\U000000E8", "\U000000E9", "\U000000EA", "\U000000EB", "\U000000EC", "\U000000ED", "\U000000EE", "\U000000EF", "\U000000F0", "\U000000F1", "\U000000F2", "\U000000F3", "\U000000F4", "\U000000F5", "\U000000F6", "\U000000F7", "\U000000F8", "\U000000F9", "\U000000FA", "\U000000FB", "\U000000FC", "\U000000FD", "\U000000FE", "\U000000FF", "\U000003BC", "\U000003A9", "\U000020AC", "\U00002122"]
+  - file:
+      type: gfonts
+      family: "Roboto"
+      weight: 700
+      italic: false
+    id: font_roboto_700_12
+    size: 12
+    glyphsets: [GF_Latin_Kernel, GF_Latin_Vietnamese]
+    ignore_missing_glyphs: true
+    glyphs: ["\U00000020", "\U00000021", "\U00000022", "\U00000023", "\U00000024", "\U00000025", "\U00000026", "\U00000027", "\U00000028", "\U00000029", "\U0000002A", "\U0000002B", "\U0000002C", "\U0000002D", "\U0000002E", "\U0000002F", "\U00000030", "\U00000031", "\U00000032", "\U00000033", "\U00000034", "\U00000035", "\U00000036", "\U00000037", "\U00000038", "\U00000039", "\U0000003A", "\U0000003B", "\U0000003C", "\U0000003D", "\U0000003E", "\U0000003F", "\U00000040", "\U00000041", "\U00000042", "\U00000043", "\U00000044", "\U00000045", "\U00000046", "\U00000047", "\U00000048", "\U00000049", "\U0000004A", "\U0000004B", "\U0000004C", "\U0000004D", "\U0000004E", "\U0000004F", "\U00000050", "\U00000051", "\U00000052", "\U00000053", "\U00000054", "\U00000055", "\U00000056", "\U00000057", "\U00000058", "\U00000059", "\U0000005A", "\U0000005B", "\U0000005C", "\U0000005D", "\U0000005E", "\U0000005F", "\U00000060", "\U00000061", "\U00000062", "\U00000063", "\U00000064", "\U00000065", "\U00000066", "\U00000067", "\U00000068", "\U00000069", "\U0000006A", "\U0000006B", "\U0000006C", "\U0000006D", "\U0000006E", "\U0000006F", "\U00000070", "\U00000071", "\U00000072", "\U00000073", "\U00000074", "\U00000075", "\U00000076", "\U00000077", "\U00000078", "\U00000079", "\U0000007A", "\U0000007B", "\U0000007C", "\U0000007D", "\U0000007E", "\U000000A0", "\U000000A1", "\U000000A2", "\U000000A3", "\U000000A4", "\U000000A5", "\U000000A6", "\U000000A7", "\U000000A8", "\U000000A9", "\U000000AA", "\U000000AB", "\U000000AC", "\U000000AD", "\U000000AE", "\U000000AF", "\U000000B0", "\U000000B1", "\U000000B2", "\U000000B3", "\U000000B4", "\U000000B5", "\U000000B6", "\U000000B7", "\U000000B8", "\U000000B9", "\U000000BA", "\U000000BB", "\U000000BC", "\U000000BD", "\U000000BE", "\U000000BF", "\U000000C0", "\U000000C1", "\U000000C2", "\U000000C3", "\U000000C4", "\U000000C5", "\U000000C6", "\U000000C7", "\U000000C8", "\U000000C9", "\U000000CA", "\U000000CB", "\U000000CC", "\U000000CD", "\U000000CE", "\U000000CF", "\U000000D0", "\U000000D1", "\U000000D2", "\U000000D3", "\U000000D4", "\U000000D5", "\U000000D6", "\U000000D7", "\U000000D8", "\U000000D9", "\U000000DA", "\U000000DB", "\U000000DC", "\U000000DD", "\U000000DE", "\U000000DF", "\U000000E0", "\U000000E1", "\U000000E2", "\U000000E3", "\U000000E4", "\U000000E5", "\U000000E6", "\U000000E7", "\U000000E8", "\U000000E9", "\U000000EA", "\U000000EB", "\U000000EC", "\U000000ED", "\U000000EE", "\U000000EF", "\U000000F0", "\U000000F1", "\U000000F2", "\U000000F3", "\U000000F4", "\U000000F5", "\U000000F6", "\U000000F7", "\U000000F8", "\U000000F9", "\U000000FA", "\U000000FB", "\U000000FC", "\U000000FD", "\U000000FE", "\U000000FF", "\U000003BC", "\U000003A9", "\U000020AC", "\U00002122"]
+  - file:
+      type: gfonts
+      family: "Roboto"
+      weight: 400
+      italic: false
+    id: font_roboto_400_14
+    size: 14
+    glyphsets: [GF_Latin_Kernel, GF_Latin_Vietnamese]
+    ignore_missing_glyphs: true
+    glyphs: ["\U00000020", "\U00000021", "\U00000022", "\U00000023", "\U00000024", "\U00000025", "\U00000026", "\U00000027", "\U00000028", "\U00000029", "\U0000002A", "\U0000002B", "\U0000002C", "\U0000002D", "\U0000002E", "\U0000002F", "\U00000030", "\U00000031", "\U00000032", "\U00000033", "\U00000034", "\U00000035", "\U00000036", "\U00000037", "\U00000038", "\U00000039", "\U0000003A", "\U0000003B", "\U0000003C", "\U0000003D", "\U0000003E", "\U0000003F", "\U00000040", "\U00000041", "\U00000042", "\U00000043", "\U00000044", "\U00000045", "\U00000046", "\U00000047", "\U00000048", "\U00000049", "\U0000004A", "\U0000004B", "\U0000004C", "\U0000004D", "\U0000004E", "\U0000004F", "\U00000050", "\U00000051", "\U00000052", "\U00000053", "\U00000054", "\U00000055", "\U00000056", "\U00000057", "\U00000058", "\U00000059", "\U0000005A", "\U0000005B", "\U0000005C", "\U0000005D", "\U0000005E", "\U0000005F", "\U00000060", "\U00000061", "\U00000062", "\U00000063", "\U00000064", "\U00000065", "\U00000066", "\U00000067", "\U00000068", "\U00000069", "\U0000006A", "\U0000006B", "\U0000006C", "\U0000006D", "\U0000006E", "\U0000006F", "\U00000070", "\U00000071", "\U00000072", "\U00000073", "\U00000074", "\U00000075", "\U00000076", "\U00000077", "\U00000078", "\U00000079", "\U0000007A", "\U0000007B", "\U0000007C", "\U0000007D", "\U0000007E", "\U000000A0", "\U000000A1", "\U000000A2", "\U000000A3", "\U000000A4", "\U000000A5", "\U000000A6", "\U000000A7", "\U000000A8", "\U000000A9", "\U000000AA", "\U000000AB", "\U000000AC", "\U000000AD", "\U000000AE", "\U000000AF", "\U000000B0", "\U000000B1", "\U000000B2", "\U000000B3", "\U000000B4", "\U000000B5", "\U000000B6", "\U000000B7", "\U000000B8", "\U000000B9", "\U000000BA", "\U000000BB", "\U000000BC", "\U000000BD", "\U000000BE", "\U000000BF", "\U000000C0", "\U000000C1", "\U000000C2", "\U000000C3", "\U000000C4", "\U000000C5", "\U000000C6", "\U000000C7", "\U000000C8", "\U000000C9", "\U000000CA", "\U000000CB", "\U000000CC", "\U000000CD", "\U000000CE", "\U000000CF", "\U000000D0", "\U000000D1", "\U000000D2", "\U000000D3", "\U000000D4", "\U000000D5", "\U000000D6", "\U000000D7", "\U000000D8", "\U000000D9", "\U000000DA", "\U000000DB", "\U000000DC", "\U000000DD", "\U000000DE", "\U000000DF", "\U000000E0", "\U000000E1", "\U000000E2", "\U000000E3", "\U000000E4", "\U000000E5", "\U000000E6", "\U000000E7", "\U000000E8", "\U000000E9", "\U000000EA", "\U000000EB", "\U000000EC", "\U000000ED", "\U000000EE", "\U000000EF", "\U000000F0", "\U000000F1", "\U000000F2", "\U000000F3", "\U000000F4", "\U000000F5", "\U000000F6", "\U000000F7", "\U000000F8", "\U000000F9", "\U000000FA", "\U000000FB", "\U000000FC", "\U000000FD", "\U000000FE", "\U000000FF", "\U000003BC", "\U000003A9", "\U000020AC", "\U00002122"]
+  - file:
+      type: gfonts
+      family: "Roboto"
+      weight: 400
+      italic: false
+    id: font_roboto_400_10
+    size: 10
+    glyphsets: [GF_Latin_Kernel, GF_Latin_Vietnamese]
+    ignore_missing_glyphs: true
+    glyphs: ["\U00000020", "\U00000021", "\U00000022", "\U00000023", "\U00000024", "\U00000025", "\U00000026", "\U00000027", "\U00000028", "\U00000029", "\U0000002A", "\U0000002B", "\U0000002C", "\U0000002D", "\U0000002E", "\U0000002F", "\U00000030", "\U00000031", "\U00000032", "\U00000033", "\U00000034", "\U00000035", "\U00000036", "\U00000037", "\U00000038", "\U00000039", "\U0000003A", "\U0000003B", "\U0000003C", "\U0000003D", "\U0000003E", "\U0000003F", "\U00000040", "\U00000041", "\U00000042", "\U00000043", "\U00000044", "\U00000045", "\U00000046", "\U00000047", "\U00000048", "\U00000049", "\U0000004A", "\U0000004B", "\U0000004C", "\U0000004D", "\U0000004E", "\U0000004F", "\U00000050", "\U00000051", "\U00000052", "\U00000053", "\U00000054", "\U00000055", "\U00000056", "\U00000057", "\U00000058", "\U00000059", "\U0000005A", "\U0000005B", "\U0000005C", "\U0000005D", "\U0000005E", "\U0000005F", "\U00000060", "\U00000061", "\U00000062", "\U00000063", "\U00000064", "\U00000065", "\U00000066", "\U00000067", "\U00000068", "\U00000069", "\U0000006A", "\U0000006B", "\U0000006C", "\U0000006D", "\U0000006E", "\U0000006F", "\U00000070", "\U00000071", "\U00000072", "\U00000073", "\U00000074", "\U00000075", "\U00000076", "\U00000077", "\U00000078", "\U00000079", "\U0000007A", "\U0000007B", "\U0000007C", "\U0000007D", "\U0000007E", "\U000000A0", "\U000000A1", "\U000000A2", "\U000000A3", "\U000000A4", "\U000000A5", "\U000000A6", "\U000000A7", "\U000000A8", "\U000000A9", "\U000000AA", "\U000000AB", "\U000000AC", "\U000000AD", "\U000000AE", "\U000000AF", "\U000000B0", "\U000000B1", "\U000000B2", "\U000000B3", "\U000000B4", "\U000000B5", "\U000000B6", "\U000000B7", "\U000000B8", "\U000000B9", "\U000000BA", "\U000000BB", "\U000000BC", "\U000000BD", "\U000000BE", "\U000000BF", "\U000000C0", "\U000000C1", "\U000000C2", "\U000000C3", "\U000000C4", "\U000000C5", "\U000000C6", "\U000000C7", "\U000000C8", "\U000000C9", "\U000000CA", "\U000000CB", "\U000000CC", "\U000000CD", "\U000000CE", "\U000000CF", "\U000000D0", "\U000000D1", "\U000000D2", "\U000000D3", "\U000000D4", "\U000000D5", "\U000000D6", "\U000000D7", "\U000000D8", "\U000000D9", "\U000000DA", "\U000000DB", "\U000000DC", "\U000000DD", "\U000000DE", "\U000000DF", "\U000000E0", "\U000000E1", "\U000000E2", "\U000000E3", "\U000000E4", "\U000000E5", "\U000000E6", "\U000000E7", "\U000000E8", "\U000000E9", "\U000000EA", "\U000000EB", "\U000000EC", "\U000000ED", "\U000000EE", "\U000000EF", "\U000000F0", "\U000000F1", "\U000000F2", "\U000000F3", "\U000000F4", "\U000000F5", "\U000000F6", "\U000000F7", "\U000000F8", "\U000000F9", "\U000000FA", "\U000000FB", "\U000000FC", "\U000000FD", "\U000000FE", "\U000000FF", "\U000003BC", "\U000003A9", "\U000020AC", "\U00002122"]
+  - file:
+      type: gfonts
+      family: "Roboto"
+      weight: 400
+      italic: false
+    id: font_roboto_400_20
+    size: 20
+    glyphsets: [GF_Latin_Kernel, GF_Latin_Vietnamese]
+    ignore_missing_glyphs: true
+    glyphs: ["\U00000020", "\U00000021", "\U00000022", "\U00000023", "\U00000024", "\U00000025", "\U00000026", "\U00000027", "\U00000028", "\U00000029", "\U0000002A", "\U0000002B", "\U0000002C", "\U0000002D", "\U0000002E", "\U0000002F", "\U00000030", "\U00000031", "\U00000032", "\U00000033", "\U00000034", "\U00000035", "\U00000036", "\U00000037", "\U00000038", "\U00000039", "\U0000003A", "\U0000003B", "\U0000003C", "\U0000003D", "\U0000003E", "\U0000003F", "\U00000040", "\U00000041", "\U00000042", "\U00000043", "\U00000044", "\U00000045", "\U00000046", "\U00000047", "\U00000048", "\U00000049", "\U0000004A", "\U0000004B", "\U0000004C", "\U0000004D", "\U0000004E", "\U0000004F", "\U00000050", "\U00000051", "\U00000052", "\U00000053", "\U00000054", "\U00000055", "\U00000056", "\U00000057", "\U00000058", "\U00000059", "\U0000005A", "\U0000005B", "\U0000005C", "\U0000005D", "\U0000005E", "\U0000005F", "\U00000060", "\U00000061", "\U00000062", "\U00000063", "\U00000064", "\U00000065", "\U00000066", "\U00000067", "\U00000068", "\U00000069", "\U0000006A", "\U0000006B", "\U0000006C", "\U0000006D", "\U0000006E", "\U0000006F", "\U00000070", "\U00000071", "\U00000072", "\U00000073", "\U00000074", "\U00000075", "\U00000076", "\U00000077", "\U00000078", "\U00000079", "\U0000007A", "\U0000007B", "\U0000007C", "\U0000007D", "\U0000007E", "\U000000A0", "\U000000A1", "\U000000A2", "\U000000A3", "\U000000A4", "\U000000A5", "\U000000A6", "\U000000A7", "\U000000A8", "\U000000A9", "\U000000AA", "\U000000AB", "\U000000AC", "\U000000AD", "\U000000AE", "\U000000AF", "\U000000B0", "\U000000B1", "\U000000B2", "\U000000B3", "\U000000B4", "\U000000B5", "\U000000B6", "\U000000B7", "\U000000B8", "\U000000B9", "\U000000BA", "\U000000BB", "\U000000BC", "\U000000BD", "\U000000BE", "\U000000BF", "\U000000C0", "\U000000C1", "\U000000C2", "\U000000C3", "\U000000C4", "\U000000C5", "\U000000C6", "\U000000C7", "\U000000C8", "\U000000C9", "\U000000CA", "\U000000CB", "\U000000CC", "\U000000CD", "\U000000CE", "\U000000CF", "\U000000D0", "\U000000D1", "\U000000D2", "\U000000D3", "\U000000D4", "\U000000D5", "\U000000D6", "\U000000D7", "\U000000D8", "\U000000D9", "\U000000DA", "\U000000DB", "\U000000DC", "\U000000DD", "\U000000DE", "\U000000DF", "\U000000E0", "\U000000E1", "\U000000E2", "\U000000E3", "\U000000E4", "\U000000E5", "\U000000E6", "\U000000E7", "\U000000E8", "\U000000E9", "\U000000EA", "\U000000EB", "\U000000EC", "\U000000ED", "\U000000EE", "\U000000EF", "\U000000F0", "\U000000F1", "\U000000F2", "\U000000F3", "\U000000F4", "\U000000F5", "\U000000F6", "\U000000F7", "\U000000F8", "\U000000F9", "\U000000FA", "\U000000FB", "\U000000FC", "\U000000FD", "\U000000FE", "\U000000FF", "\U000003BC", "\U000003A9", "\U000020AC", "\U00002122"]
+  - file: "fonts/materialdesignicons-webfont.ttf"
+    id: font_material_design_icons_400_32
+    size: 32
+    glyphs: ["\U000F0026", "\U000F0590", "\U000F0591", "\U000F0592", "\U000F0593", "\U000F0594", "\U000F0595", "\U000F0596", "\U000F0597", "\U000F0598", "\U000F0599", "\U000F059D", "\U000F059E", "\U000F067E", "\U000F067F"]
+  - file: "fonts/materialdesignicons-webfont.ttf"
+    id: font_material_design_icons_400_19
+    size: 19
+    glyphs: ["\U000F0079", "\U000F007A", "\U000F007B", "\U000F007C", "\U000F007D", "\U000F007E", "\U000F007F", "\U000F0080", "\U000F0081", "\U000F0082", "\U000F0083", "\U000F050F", "\U000F058E", "\U000F091F", "\U000F0922", "\U000F0925", "\U000F0928", "\U000F092B"]
+  - file:
+      type: gfonts
+      family: "Roboto"
+      weight: 400
+      italic: false
+    id: font_chat_status
+    size: 16
+    glyphsets: [GF_Latin_Kernel, GF_Latin_Vietnamese]
+    ignore_missing_glyphs: true
+  - file:
+      type: gfonts
+      family: "Roboto"
+      weight: 400
+      italic: false
+    id: font_chat_content
+    size: 14
+    glyphsets: [GF_Latin_Kernel, GF_Latin_Vietnamese]
+    ignore_missing_glyphs: true
+
 globals:
-  - id: chat_msgs
-    type: std::vector<std::string>
-    restore_value: false
-  - id: chat_is_user
-    type: std::vector<bool>
-    restore_value: false
   - id: wake_word_just_triggered
     type: bool
     restore_value: false
@@ -973,179 +1329,74 @@ globals:
     type: int
     restore_value: false
     initial_value: ${voice_assist_not_ready_phase_id}
-  - id: global_first_active_timer
-    type: voice_assistant::Timer
-    restore_value: false
-  - id: global_is_timer_active
-    type: bool
-    restore_value: false
-  - id: global_first_timer
-    type: voice_assistant::Timer
-    restore_value: false
-  - id: global_is_timer
-    type: bool
-    restore_value: false
   - id: boot_sound_played
     type: bool
     restore_value: no
     initial_value: "false"
+  - id: chat_msgs
+    type: std::vector<std::string>
+    restore_value: false
+  - id: chat_is_user
+    type: std::vector<bool>
+    restore_value: false
 
-image:
-  - file: ${error_illustration_file}
-    id: casita_error
-    resize: ${imagewidth}x${imageheight}
-    type: RGB
-    transparency: alpha_channel
-  - file: ${idle_illustration_file}
-    id: casita_idle
-    resize: ${imagewidth}x${imageheight}
-    type: RGB
-    transparency: alpha_channel
-  - file: ${listening_illustration_file}
-    id: casita_listening
-    resize: ${imagewidth}x${imageheight}
-    type: RGB
-    transparency: alpha_channel
-  - file: ${thinking_illustration_file}
-    id: casita_thinking
-    resize: ${imagewidth}x${imageheight}
-    type: RGB
-    transparency: alpha_channel
-  - file: ${replying_illustration_file}
-    id: casita_replying
-    resize: ${imagewidth}x${imageheight}
-    type: RGB
-    transparency: alpha_channel
-  - file: ${timer_finished_illustration_file}
-    id: casita_timer_finished
-    resize: ${imagewidth}x${imageheight}
-    type: RGB
-    transparency: alpha_channel
-  - file: ${loading_illustration_file}
-    id: casita_initializing
-    resize: ${imagewidth}x${imageheight}
-    type: RGB
-    transparency: alpha_channel
-  - file: ${mute_illustration_file}
-    id: casita_muted
-    resize: ${imagewidth}x${imageheight}
-    type: RGB
-    transparency: alpha_channel
-  - file: https://github.com/esphome/wake-word-voice-assistants/raw/main/error_box_illustrations/error-no-wifi.png
-    id: error_no_wifi
-    resize: ${imagewidth}x${imageheight}
-    type: RGB
-    transparency: alpha_channel
-  - file: https://github.com/esphome/wake-word-voice-assistants/raw/main/error_box_illustrations/error-no-ha.png
-    id: error_no_ha
-    resize: ${imagewidth}x${imageheight}
-    type: RGB
-    transparency: alpha_channel
+# ============================================================================
+# Interval - Auto refresh display widgets
+# ============================================================================
+interval:
+  - interval: 10s
+    then:
+      - lvgl.label.update:
+          id: w_mm8learfkl1p2
+          text: !lambda |-
+            auto now = id(ha_time).now();
+            if (!now.is_valid()) return std::string("--:--\n---");
+            char buf[32];
+            now.strftime(buf, sizeof(buf), "%H:%M\n%a, %b %d");
+            return std::string(buf);
+      - lvgl.label.update:
+          id: lbl_wday0_name
+          text: "Today"
+      - lvgl.label.update:
+          id: lbl_wday1_name
+          text: !lambda |-
+            auto t = id(ha_time).now();
+            if (!t.is_valid()) return std::string("---");
+            ESPTime future = ESPTime::from_epoch_local(t.timestamp + 86400);
+            char buf[16];
+            future.strftime(buf, sizeof(buf), "%a");
+            return std::string(buf);
+      - lvgl.label.update:
+          id: lbl_wday2_name
+          text: !lambda |-
+            auto t = id(ha_time).now();
+            if (!t.is_valid()) return std::string("---");
+            ESPTime future = ESPTime::from_epoch_local(t.timestamp + (2 * 86400));
+            char buf[16];
+            future.strftime(buf, sizeof(buf), "%a");
+            return std::string(buf);
+      - lvgl.label.update:
+          id: lbl_wday3_name
+          text: !lambda |-
+            auto t = id(ha_time).now();
+            if (!t.is_valid()) return std::string("---");
+            ESPTime future = ESPTime::from_epoch_local(t.timestamp + (3 * 86400));
+            char buf[16];
+            future.strftime(buf, sizeof(buf), "%a");
+            return std::string(buf);
+      - lvgl.label.update:
+          id: lbl_wday4_name
+          text: !lambda |-
+            auto t = id(ha_time).now();
+            if (!t.is_valid()) return std::string("---");
+            ESPTime future = ESPTime::from_epoch_local(t.timestamp + (4 * 86400));
+            char buf[16];
+            future.strftime(buf, sizeof(buf), "%a");
+            return std::string(buf);
 
-font:
-  - file:
-      type: gfonts
-      family: Noto Sans
-      weight: 300
-      italic: true
-    id: font_request
-    size: 10
-    glyphsets:
-      - GF_Latin_Kernel
-      - GF_Latin_Vietnamese
-  - file:
-      type: gfonts
-      family: Noto Sans
-      weight: 300
-    id: font_response
-    size: 10
-    glyphsets:
-      - GF_Latin_Kernel
-      - GF_Latin_Vietnamese
-  - file:
-      type: gfonts
-      family: Noto Sans
-      weight: 300
-    id: font_timer
-    size: 30
-    glyphsets:
-      - GF_Latin_Kernel
-      - GF_Latin_Vietnamese
-
-text_sensor:
-  - id: text_request
-    platform: template
-    icon: mdi:ear-hearing
-    name: "Request"
-    entity_category: diagnostic 
-    on_value:
-      lambda: |-
-        std::string req = id(text_request).state.c_str();
-        if(req.length() > 0) {
-          if(req.length() > 500) {
-            std::string truncated = esphome::str_truncate(req.c_str(), 499);
-            id(text_request).state = (truncated + "...").c_str();
-            req = id(text_request).state.c_str();
-          }
-          id(chat_msgs).push_back(req);
-          id(chat_is_user).push_back(true);
-          if(id(chat_msgs).size() > 10) {
-            id(chat_msgs).erase(id(chat_msgs).begin());
-            id(chat_is_user).erase(id(chat_is_user).begin());
-          }
-        }
-        std::string request = id(text_request).state.c_str();
-        if (request.find("không cần") != std::string::npos ||
-            request.find("Không cần") != std::string::npos ||
-            request.find("cảm ơn") != std::string::npos ||
-            request.find("Cảm ơn") != std::string::npos ||
-            request.find("dừng lại") != std::string::npos ||
-            request.find("Dừng lại") != std::string::npos ||
-            request.find("stop") != std::string::npos ||
-            request.find("Stop") != std::string::npos ||
-            request.find("Phẩy") != std::string::npos ||
-            request.find("phẩy") != std::string::npos) {
-          id(va)->request_stop();
-        }
-  - id: text_response
-    platform: template
-    icon: mdi:react
-    name: "Response"
-    entity_category: diagnostic
-    on_value:
-      lambda: |-
-        std::string res = id(text_response).state.c_str();
-        if(res.length() > 0) {
-          if(res.length() > 500) {
-            std::string truncated = esphome::str_truncate(res.c_str(), 499);
-            id(text_response).state = (truncated + "...").c_str();
-            res = id(text_response).state.c_str();
-          }
-          id(chat_msgs).push_back(res);
-          id(chat_is_user).push_back(false);
-          if(id(chat_msgs).size() > 10) {
-            id(chat_msgs).erase(id(chat_msgs).begin());
-            id(chat_is_user).erase(id(chat_is_user).begin());
-          }
-        }
-
-color:
-  - id: idle_color
-    hex: ${idle_illustration_background_color}
-  - id: listening_color
-    hex: ${listening_illustration_background_color}
-  - id: thinking_color
-    hex: ${thinking_illustration_background_color}
-  - id: replying_color
-    hex: ${replying_illustration_background_color}
-  - id: loading_color
-    hex: ${loading_illustration_background_color}
-  - id: error_color
-    hex: ${error_illustration_background_color}
-  - id: active_timer_color
-    hex: "26ed3a"
-  - id: paused_timer_color
-    hex: "3b89e3"
+# ============================================================================
+# LVGL Fonts
+# ============================================================================
 
 spi:
   - id: spi_bus
@@ -1162,249 +1413,409 @@ display:
     dc_pin: 46
     update_interval: never
     dimensions:
-        height: 320  # Sau khi swap_xy=true từ base config → 240x320
+        height: 320
         width: 240
     transform:
-      # Base config: swap_xy=true, mirror_x=false, mirror_y=false (rotation=0)
-      # Rotation=1 (90°): swap_xy=false, mirror_x=true, mirror_y=false
-      # → Kết quả: 240x320 với mirror_x
-      swap_xy: false  # Từ base swap_xy=true → false
-      mirror_x: true  # Từ base mirror_x=false → true
+      swap_xy: false
+      mirror_x: true
       mirror_y: false
 
-    pages:
-      - id: idle_page
-        lambda: |-
-          it.fill(id(idle_color));
-          it.image((it.get_width() / 2), (it.get_height() / 2), id(casita_idle), ImageAlign::CENTER);
-          id(draw_timer_timeline).execute();
-          id(draw_active_timer_widget).execute();
-      - id: listening_page
-        lambda: |-
-          if (id(show_text).state) {
-            it.fill(Color(237, 237, 237));
-            
-            struct WrapResult { std::vector<std::string> lines; int width; int height; int line_height; };
-            auto wrap_text = [&](const std::string& text, esphome::font::Font* f, int max_w) -> WrapResult {
-                WrapResult res; res.width = 0; res.height = 0; res.line_height = 20;
-                if (text.empty()) return res;
-                int x1, y1, w, h;
-                it.get_text_bounds(0, 0, "A", f, TextAlign::TOP_LEFT, &x1, &y1, &w, &h);
-                res.line_height = h > 0 ? (h + 4) : 20;
-                std::string word, line;
-                for (size_t i = 0; i < text.length(); ++i) {
-                    bool is_space = (text[i] == ' ');
-                    word += text[i];
-                    if (is_space || i == text.length() - 1) {
-                        if (word.empty()) continue;
-                        std::string test_line = line + word;
-                        it.get_text_bounds(0, 0, test_line.c_str(), f, TextAlign::TOP_LEFT, &x1, &y1, &w, &h);
-                        if (w > max_w && !line.empty()) {
-                            res.lines.push_back(line);
-                            it.get_text_bounds(0, 0, line.c_str(), f, TextAlign::TOP_LEFT, &x1, &y1, &w, &h);
-                            if (w > res.width) res.width = w;
-                            line = (word.length() > 0 && word[0] == ' ') ? word.substr(1) : word;
-                        } else { line = test_line; }
-                        word.clear();
-                    }
-                }
-                if (!line.empty()) {
-                    res.lines.push_back(line);
-                    it.get_text_bounds(0, 0, line.c_str(), f, TextAlign::TOP_LEFT, &x1, &y1, &w, &h);
-                    if (w > res.width) res.width = w;
-                }
-                res.height = res.lines.size() * res.line_height; return res;
-            };
+image:
+  - id: bg_idle
+    file: "idle.jpg"
+    resize: 240x320
+    type: RGB565
 
-            int current_y = it.get_height(); 
-            for (int i = id(chat_msgs).size() - 1; i >= 0; --i) {
-                std::string text = id(chat_msgs)[i];
-                bool is_user = id(chat_is_user)[i];
-                esphome::font::Font* f = is_user ? id(font_request) : id(font_response);
-                
-                WrapResult wrap = wrap_text(text, f, 200);
-                int bubble_w = wrap.width + 16;
-                int bubble_h = wrap.height + 16;
-                
-                current_y -= (bubble_h + 10); 
-                if (current_y + bubble_h < 24) break; 
-                
-                int bubble_y = current_y; 
-                int bubble_x = is_user ? (it.get_width() - bubble_w - 10) : 10;
-                Color bg_color = is_user ? Color(149, 236, 105) : Color::WHITE;
-                
-                it.filled_rectangle(bubble_x, bubble_y, bubble_w, bubble_h, bg_color);
-                for (size_t j = 0; j < wrap.lines.size(); ++j) {
-                    it.printf(bubble_x + 8, bubble_y + 8 + j * wrap.line_height, f, Color::BLACK, TextAlign::TOP_LEFT, "%s", wrap.lines[j].c_str());
-                }
-            }
+lvgl:
+  id: my_lvgl
+  log_level: WARN
+  bg_color: "0x000000"
+  displays:
+    - s3_box_lcd
 
-            if (id(chat_msgs).empty()) {
-                it.printf(it.get_width() / 2, it.get_height() / 2, id(font_request), Color::BLACK, TextAlign::CENTER, "Đang chờ trò chuyện...");
-            }
-            
-            it.filled_rectangle(0, 0, it.get_width(), 24, Color(220, 220, 220));
-            it.printf(it.get_width() / 2, 12, id(font_request), Color(10, 200, 10), TextAlign::CENTER, "Đang Nghe...");
-          } else {
-             it.fill(id(listening_color));
-             it.image((it.get_width() / 2), (it.get_height() / 2), id(casita_listening), ImageAlign::CENTER);
-             id(draw_timer_timeline).execute();
-          }
-      - id: thinking_page
-        lambda: |-
-          if (id(show_text).state) {
-            it.fill(Color(237, 237, 237));
-            
-            struct WrapResult { std::vector<std::string> lines; int width; int height; int line_height; };
-            auto wrap_text = [&](const std::string& text, esphome::font::Font* f, int max_w) -> WrapResult {
-                WrapResult res; res.width = 0; res.height = 0; res.line_height = 20;
-                if (text.empty()) return res;
-                int x1, y1, w, h;
-                it.get_text_bounds(0, 0, "A", f, TextAlign::TOP_LEFT, &x1, &y1, &w, &h);
-                res.line_height = h > 0 ? (h + 4) : 20;
-                std::string word, line;
-                for (size_t i = 0; i < text.length(); ++i) {
-                    bool is_space = (text[i] == ' ');
-                    word += text[i];
-                    if (is_space || i == text.length() - 1) {
-                        if (word.empty()) continue;
-                        std::string test_line = line + word;
-                        it.get_text_bounds(0, 0, test_line.c_str(), f, TextAlign::TOP_LEFT, &x1, &y1, &w, &h);
-                        if (w > max_w && !line.empty()) {
-                            res.lines.push_back(line);
-                            it.get_text_bounds(0, 0, line.c_str(), f, TextAlign::TOP_LEFT, &x1, &y1, &w, &h);
-                            if (w > res.width) res.width = w;
-                            line = (word.length() > 0 && word[0] == ' ') ? word.substr(1) : word;
-                        } else { line = test_line; }
-                        word.clear();
-                    }
-                }
-                if (!line.empty()) {
-                    res.lines.push_back(line);
-                    it.get_text_bounds(0, 0, line.c_str(), f, TextAlign::TOP_LEFT, &x1, &y1, &w, &h);
-                    if (w > res.width) res.width = w;
-                }
-                res.height = res.lines.size() * res.line_height; return res;
-            };
+  pages:
+    - id: page_0
+      widgets:
+        # Background image
+        - image:
+            x: 0
+            y: 0
+            width: 240
+            height: 320
+            src: bg_idle
+        # widget:datetime id:w_mm8learfkl1p2 type:datetime x:0 y:69 w:240 h:41 format:"time_date" time_font_size:30 date_font_size:18 color:"theme_auto" italic:false font_family:"Roboto" text_align:"CENTER" width:120 height:50 bg_color:"transparent" border_width:0 border_color:"theme_auto" border_radius:0
+        - label:
+            id: w_mm8learfkl1p2
+            x: 0
+            y: 70
+            width: 240
+            height: 55
+            text: !lambda |-
+              auto now = id(ha_time).now();
+              return now.strftime("%H:%M\n%a, %b %d").c_str();
+            text_font: font_roboto_700_30
+            text_color: "0xFFFFFF"
+            text_align: center
+            opa: cover
+        # widget:weather_forecast id:w_mm8lgc1mtkgau type:weather_forecast x:2 y:160 w:240 h:80 entity:weather.accuweather_hai_duong weather_entity:"weather.forecast_home" days:5 layout:"horizontal" icon_size:32 temp_font_size:14 day_font_size:12 color:"theme_auto" font_family:"Roboto" show_high_low:false border_width:0 border_color:"theme_auto" border_radius:0 background_color:"transparent" temp_unit:"C" precision:1 width:370 height:90
+        - obj:
+            id: w_mm8lgc1mtkgau
+            x: 0
+            y: 165
+            width: 240
+            height: 150
+            bg_opa: TRANSP
+            radius: 8
+            border_width: 1
+            border_color: "0xFFFFFF"
+            pad_all: 5
+            scrollbar_mode: "off"
+            layout:
+              type: flex
+              flex_flow: row
+              flex_align_main: space_around
+              flex_align_cross: center
+            widgets:
+              -
+                obj:
+                  width: 20%
+                  height: 100%
+                  bg_opa: transp
+                  border_width: 0
+                  widgets:
+                    -
+                      label:
+                        id: lbl_wday0_name
+                        align: top_mid
+                        text: "Today"
+                        text_font: font_roboto_700_12
+                        text_color: "0xFFFFFF"
+                    -
+                      label:
+                        id: lbl_wday0_icon
+                        align: center
+                        y: 0
+                        text: "\U000F0590"
+                        text_font: font_material_design_icons_400_32
+                        text_color: "0xFFFFFF"
+                    -
+                      label:
+                        id: lbl_wday0_temp
+                        align: bottom_mid
+                        text: "--"
+                        text_font: font_roboto_400_14
+                        text_color: "0xFFFFFF"
+              -
+                obj:
+                  width: 20%
+                  height: 100%
+                  bg_opa: transp
+                  border_width: 0
+                  widgets:
+                    -
+                      label:
+                        id: lbl_wday1_name
+                        align: top_mid
+                        text: "---"
+                        text_font: font_roboto_700_12
+                        text_color: "0xFFFFFF"
+                    -
+                      label:
+                        id: lbl_wday1_icon
+                        align: center
+                        y: 0
+                        text: "\U000F0590"
+                        text_font: font_material_design_icons_400_32
+                        text_color: "0xFFFFFF"
+                    -
+                      label:
+                        id: lbl_wday1_temp
+                        align: bottom_mid
+                        text: "--"
+                        text_font: font_roboto_400_14
+                        text_color: "0xFFFFFF"
+              -
+                obj:
+                  width: 20%
+                  height: 100%
+                  bg_opa: transp
+                  border_width: 0
+                  widgets:
+                    -
+                      label:
+                        id: lbl_wday2_name
+                        align: top_mid
+                        text: "---"
+                        text_font: font_roboto_700_12
+                        text_color: "0xFFFFFF"
+                    -
+                      label:
+                        id: lbl_wday2_icon
+                        align: center
+                        y: 0
+                        text: "\U000F0590"
+                        text_font: font_material_design_icons_400_32
+                        text_color: "0xFFFFFF"
+                    -
+                      label:
+                        id: lbl_wday2_temp
+                        align: bottom_mid
+                        text: "--"
+                        text_font: font_roboto_400_14
+                        text_color: "0xFFFFFF"
+              -
+                obj:
+                  width: 20%
+                  height: 100%
+                  bg_opa: transp
+                  border_width: 0
+                  widgets:
+                    -
+                      label:
+                        id: lbl_wday3_name
+                        align: top_mid
+                        text: "---"
+                        text_font: font_roboto_700_12
+                        text_color: "0xFFFFFF"
+                    -
+                      label:
+                        id: lbl_wday3_icon
+                        align: center
+                        y: 0
+                        text: "\U000F0590"
+                        text_font: font_material_design_icons_400_32
+                        text_color: "0xFFFFFF"
+                    -
+                      label:
+                        id: lbl_wday3_temp
+                        align: bottom_mid
+                        text: "--"
+                        text_font: font_roboto_400_14
+                        text_color: "0xFFFFFF"
+              -
+                obj:
+                  width: 20%
+                  height: 100%
+                  bg_opa: transp
+                  border_width: 0
+                  widgets:
+                    -
+                      label:
+                        id: lbl_wday4_name
+                        align: top_mid
+                        text: "---"
+                        text_font: font_roboto_700_12
+                        text_color: "0xFFFFFF"
+                    -
+                      label:
+                        id: lbl_wday4_icon
+                        align: center
+                        y: 0
+                        text: "\U000F0590"
+                        text_font: font_material_design_icons_400_32
+                        text_color: "0xFFFFFF"
+                    -
+                      label:
+                        id: lbl_wday4_temp
+                        align: bottom_mid
+                        text: "--"
+                        text_font: font_roboto_400_14
+                        text_color: "0xFFFFFF"
+        # widget:label id:w_mm8ld9nagpb6g type:label x:0 y:32 w:240 h:31 text:"Black Smart Home" font_size:20 font_family:"Roboto" color:"theme_auto" font_weight:400 italic:false bpp:1 text_align:"CENTER" bg_color:"transparent" opa:255 border_width:0 border_color:"black" border_radius:0 opacity:100
+        - label:
+            id: w_mm8ld9nagpb6g
+            x: 0
+            y: 34
+            width: 240
+            height: 30
+            text: "Black Smart Home"
+            text_font: font_roboto_400_20
+            text_color: "0xFFFFFF"
+            text_align: center
+            opa: cover
+            border_width: 0
+            border_color: "black"
+            border_side: none
+            radius: 0
+        # Sensor bar - no background box, direct labels
+        - label:
+            id: lbl_wifi_icon
+            x: 2
+            y: 5
+            text: "\U000F092B"
+            text_font: font_material_design_icons_400_19
+            text_color: "0xFFFFFF"
+        - label:
+            id: lbl_wifi_text
+            x: 22
+            y: 8
+            text: "--dB"
+            text_font: font_roboto_400_10
+            text_color: "0xFFFFFF"
+        - label:
+            x: 62
+            y: 5
+            text: "\U000F050F"
+            text_font: font_material_design_icons_400_19
+            text_color: "0xFFFFFF"
+        - label:
+            id: lbl_temp_text
+            x: 82
+            y: 8
+            text: "--°C"
+            text_font: font_roboto_400_10
+            text_color: "0xFFFFFF"
+        - label:
+            x: 122
+            y: 5
+            text: "\U000F058E"
+            text_font: font_material_design_icons_400_19
+            text_color: "0xFFFFFF"
+        - label:
+            id: lbl_hum_text
+            x: 142
+            y: 8
+            text: "--%"
+            text_font: font_roboto_400_10
+            text_color: "0xFFFFFF"
+        - label:
+            id: lbl_bat_icon
+            x: 182
+            y: 5
+            text: "\U000F0082"
+            text_font: font_material_design_icons_400_19
+            text_color: "0xFFFFFF"
+        - label:
+            id: lbl_bat_text
+            x: 202
+            y: 8
+            text: "--%"
+            text_font: font_roboto_400_10
+            text_color: "0xFFFFFF"
+        # widget:lvgl_label id:w_mm97n42kobc94 type:lvgl_label x:0 y:124 w:240 h:31 text:"Hải Dương" font_size:20 font_family:"Roboto" color:"theme_auto" font_weight:400 italic:false text_align:"CENTER" bg_color:"transparent" opa:255 border_width:0 border_color:"theme_auto" border_radius:0
+        - label:
+            id: w_mm97n42kobc94
+            x: 0
+            y: 135
+            width: 240
+            height: 25
+            text: "Hải Dương"
+            text_font: font_roboto_400_20
+            text_color: "0xFFFFFF"
+            text_align: CENTER
+            opa: cover
+            border_width: 0
+            border_color: "0xFFFFFF"
+            border_side: none
+            radius: 0
 
-            int current_y = it.get_height(); 
-            for (int i = id(chat_msgs).size() - 1; i >= 0; --i) {
-                std::string text = id(chat_msgs)[i];
-                bool is_user = id(chat_is_user)[i];
-                esphome::font::Font* f = is_user ? id(font_request) : id(font_response);
-                
-                WrapResult wrap = wrap_text(text, f, 200);
-                int bubble_w = wrap.width + 16;
-                int bubble_h = wrap.height + 16;
-                
-                current_y -= (bubble_h + 10); 
-                if (current_y + bubble_h < 24) break; 
-                
-                int bubble_y = current_y; 
-                int bubble_x = is_user ? (it.get_width() - bubble_w - 10) : 10;
-                Color bg_color = is_user ? Color(149, 236, 105) : Color::WHITE;
-                
-                it.filled_rectangle(bubble_x, bubble_y, bubble_w, bubble_h, bg_color);
-                for (size_t j = 0; j < wrap.lines.size(); ++j) {
-                    it.printf(bubble_x + 8, bubble_y + 8 + j * wrap.line_height, f, Color::BLACK, TextAlign::TOP_LEFT, "%s", wrap.lines[j].c_str());
-                }
-            }
-
-            it.filled_rectangle(0, 0, it.get_width(), 24, Color(220, 220, 220));
-            it.printf(it.get_width() / 2, 12, id(font_request), Color(10, 10, 200), TextAlign::CENTER, "Đang Xử Lý...");
-          } else {
-             it.fill(Color::BLACK);
-             it.image((it.get_width() / 2), (it.get_height() / 2), id(casita_thinking), ImageAlign::CENTER);
-          }
-          id(draw_timer_timeline).execute();
-      - id: replying_page
-        lambda: |-
-          if (id(show_text).state) {
-            it.fill(Color(237, 237, 237));
-            
-            struct WrapResult { std::vector<std::string> lines; int width; int height; int line_height; };
-            auto wrap_text = [&](const std::string& text, esphome::font::Font* f, int max_w) -> WrapResult {
-                WrapResult res; res.width = 0; res.height = 0; res.line_height = 20;
-                if (text.empty()) return res;
-                int x1, y1, w, h;
-                it.get_text_bounds(0, 0, "A", f, TextAlign::TOP_LEFT, &x1, &y1, &w, &h);
-                res.line_height = h > 0 ? (h + 4) : 20;
-                std::string word, line;
-                for (size_t i = 0; i < text.length(); ++i) {
-                    bool is_space = (text[i] == ' ');
-                    word += text[i];
-                    if (is_space || i == text.length() - 1) {
-                        if (word.empty()) continue;
-                        std::string test_line = line + word;
-                        it.get_text_bounds(0, 0, test_line.c_str(), f, TextAlign::TOP_LEFT, &x1, &y1, &w, &h);
-                        if (w > max_w && !line.empty()) {
-                            res.lines.push_back(line);
-                            it.get_text_bounds(0, 0, line.c_str(), f, TextAlign::TOP_LEFT, &x1, &y1, &w, &h);
-                            if (w > res.width) res.width = w;
-                            line = (word.length() > 0 && word[0] == ' ') ? word.substr(1) : word;
-                        } else { line = test_line; }
-                        word.clear();
-                    }
-                }
-                if (!line.empty()) {
-                    res.lines.push_back(line);
-                    it.get_text_bounds(0, 0, line.c_str(), f, TextAlign::TOP_LEFT, &x1, &y1, &w, &h);
-                    if (w > res.width) res.width = w;
-                }
-                res.height = res.lines.size() * res.line_height; return res;
-            };
-
-            int current_y = it.get_height(); 
-            for (int i = id(chat_msgs).size() - 1; i >= 0; --i) {
-                std::string text = id(chat_msgs)[i];
-                bool is_user = id(chat_is_user)[i];
-                esphome::font::Font* f = is_user ? id(font_request) : id(font_response);
-                
-                WrapResult wrap = wrap_text(text, f, 200);
-                int bubble_w = wrap.width + 16;
-                int bubble_h = wrap.height + 16;
-                
-                current_y -= (bubble_h + 10); 
-                if (current_y + bubble_h < 24) break; 
-                
-                int bubble_y = current_y; 
-                int bubble_x = is_user ? (it.get_width() - bubble_w - 10) : 10;
-                Color bg_color = is_user ? Color(149, 236, 105) : Color::WHITE;
-                
-                it.filled_rectangle(bubble_x, bubble_y, bubble_w, bubble_h, bg_color);
-                for (size_t j = 0; j < wrap.lines.size(); ++j) {
-                    it.printf(bubble_x + 8, bubble_y + 8 + j * wrap.line_height, f, Color::BLACK, TextAlign::TOP_LEFT, "%s", wrap.lines[j].c_str());
-                }
-            }
-
-            it.filled_rectangle(0, 0, it.get_width(), 24, Color(220, 220, 220));
-            it.printf(it.get_width() / 2, 12, id(font_request), Color(100, 100, 100), TextAlign::CENTER, "Đang Trả Lời...");
-          } else {
-             it.fill(Color::BLACK);
-             it.image((it.get_width() / 2), (it.get_height() / 2), id(casita_replying), ImageAlign::CENTER);
-          }
-          id(draw_timer_timeline).execute();
-      - id: timer_finished_page
-        lambda: |-
-          it.fill(id(idle_color));
-          it.image((it.get_width() / 2), (it.get_height() / 2), id(casita_timer_finished), ImageAlign::CENTER);
-      - id: error_page
-        lambda: |-
-          it.fill(id(error_color));
-          it.image((it.get_width() / 2), (it.get_height() / 2), id(casita_error), ImageAlign::CENTER);
-      - id: no_ha_page
-        lambda: |-
-          it.image((it.get_width() / 2), (it.get_height() / 2), id(error_no_ha), ImageAlign::CENTER);
-      - id: no_wifi_page
-        lambda: |-
-          it.image((it.get_width() / 2), (it.get_height() / 2), id(error_no_wifi), ImageAlign::CENTER);
-      - id: initializing_page
-        lambda: |-
-          it.fill(id(loading_color));
-          it.image((it.get_width() / 2), (it.get_height() / 2), id(casita_initializing), ImageAlign::CENTER);
-      - id: muted_page
-        lambda: |-
-          it.fill(Color::BLACK);
-          it.image((it.get_width() / 2), (it.get_height() / 2), id(casita_muted), ImageAlign::CENTER);
-          id(draw_timer_timeline).execute();
-          id(draw_active_timer_widget).execute();
+    # ================================================================
+    # PAGE 1 - Chat / Conversation page
+    # ================================================================
+    - id: page_1
+      widgets:
+        # Background image (same as page_0)
+        - image:
+            x: 0
+            y: 0
+            width: 240
+            height: 320
+            src: bg_idle
+        # ---- Status bar (same as page_0) ----
+        - label:
+            id: lbl_p1_wifi_icon
+            x: 2
+            y: 5
+            text: "\U000F092B"
+            text_font: font_material_design_icons_400_19
+            text_color: "0xFFFFFF"
+        - label:
+            id: lbl_p1_wifi_text
+            x: 22
+            y: 8
+            text: "--dB"
+            text_font: font_roboto_400_10
+            text_color: "0xFFFFFF"
+        - label:
+            x: 62
+            y: 5
+            text: "\U000F050F"
+            text_font: font_material_design_icons_400_19
+            text_color: "0xFFFFFF"
+        - label:
+            id: lbl_p1_temp_text
+            x: 82
+            y: 8
+            text: "--°C"
+            text_font: font_roboto_400_10
+            text_color: "0xFFFFFF"
+        - label:
+            x: 122
+            y: 5
+            text: "\U000F058E"
+            text_font: font_material_design_icons_400_19
+            text_color: "0xFFFFFF"
+        - label:
+            id: lbl_p1_hum_text
+            x: 142
+            y: 8
+            text: "--%"
+            text_font: font_roboto_400_10
+            text_color: "0xFFFFFF"
+        - label:
+            id: lbl_p1_bat_icon
+            x: 182
+            y: 5
+            text: "\U000F0082"
+            text_font: font_material_design_icons_400_19
+            text_color: "0xFFFFFF"
+        - label:
+            id: lbl_p1_bat_text
+            x: 202
+            y: 8
+            text: "--%"
+            text_font: font_roboto_400_10
+            text_color: "0xFFFFFF"
+        # ---- Status bar separator line ----
+        - obj:
+            x: 0
+            y: 26
+            width: 240
+            height: 1
+            bg_color: "0x888888"
+            bg_opa: COVER
+            border_width: 0
+        # ---- Chat status label (Đang Nghe / Đang Xử Lý / Đang Trả Lời) ----
+        - label:
+            id: lbl_chat_status
+            x: 0
+            y: 30
+            width: 240
+            height: 22
+            text: "Đang chờ..."
+            text_font: font_chat_status
+            text_color: "0x0AC80A"
+            text_align: CENTER
+        # ---- Chat content scrollable container ----
+        - obj:
+            id: chat_container
+            x: 0
+            y: 55
+            width: 240
+            height: 265
+            bg_opa: TRANSP
+            border_width: 0
+            pad_all: 4
+            scrollbar_mode: "off"
+            layout:
+              type: flex
+              flex_flow: column
+              flex_align_main: start
+              flex_align_cross: start
+            widgets:
+              - label:
+                  id: lbl_chat_placeholder
+                  text: ""
+                  text_font: font_chat_content
+                  text_color: "0xAAAAAA"
+                  width: 228
